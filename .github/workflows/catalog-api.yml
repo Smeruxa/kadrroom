@@ -1,0 +1,88 @@
+name: Catalog API
+
+on:
+    pull_request:
+        paths:
+            - 'apps/catalog-api/**'
+            - 'tools/format-go/**'
+            - 'go.mod'
+            - 'go.sum'
+            - '.golangci.yml'
+            - '.dockerignore'
+            - '.github/workflows/catalog-api.yml'
+            - '.github/workflows/container-image.yml'
+            - '.github/workflows/deploy-testing.yml'
+    push:
+        branches: [main]
+        paths:
+            - 'apps/catalog-api/**'
+            - 'tools/format-go/**'
+            - 'go.mod'
+            - 'go.sum'
+            - '.golangci.yml'
+            - '.dockerignore'
+            - '.github/workflows/catalog-api.yml'
+            - '.github/workflows/container-image.yml'
+            - '.github/workflows/deploy-testing.yml'
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+concurrency:
+    group: catalog-api-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    lint:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  persist-credentials: false
+            - uses: actions/setup-go@v6
+              with:
+                  go-version-file: go.mod
+                  cache: false
+            - run: go run ../../tools/format-go
+              working-directory: apps/catalog-api
+            - run: go run .
+              working-directory: tools/format-go
+            - uses: golangci/golangci-lint-action@v9
+              with:
+                  version: v2.15.0
+                  args: ./apps/catalog-api/... ./tools/format-go/...
+    test:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  persist-credentials: false
+            - uses: actions/setup-go@v6
+              with:
+                  go-version-file: go.mod
+                  cache: false
+            - run: go test -race -cover ./apps/catalog-api/... ./tools/format-go/...
+    build:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  persist-credentials: false
+            - uses: actions/setup-go@v6
+              with:
+                  go-version-file: go.mod
+                  cache: false
+            - run: go build -trimpath -o "$RUNNER_TEMP/catalog-api" ./apps/catalog-api
+    build-image:
+        uses: ./.github/workflows/container-image.yml
+        with:
+            app: catalog-api
+    deploy-in-testing:
+        needs: [lint, test, build, build-image]
+        uses: ./.github/workflows/deploy-testing.yml
+        with:
+            app: catalog-api

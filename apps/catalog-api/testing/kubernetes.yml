@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: catalog-api
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            app: catalog-api
+    template:
+        metadata:
+            labels:
+                app: catalog-api
+        spec:
+            automountServiceAccountToken: false
+            securityContext:
+                runAsNonRoot: true
+            containers:
+                - name: catalog-api
+                  image: kadrroom/catalog-api:ci
+                  imagePullPolicy: Never
+                  ports:
+                      - name: http
+                        containerPort: 8080
+                  readinessProbe:
+                      httpGet:
+                          path: /healthz
+                          port: http
+                      periodSeconds: 2
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: catalog-api
+spec:
+    selector:
+        app: catalog-api
+    ports:
+        - name: http
+          port: 8080
+          targetPort: http

@@ -1,0 +1,16 @@
+.git
+.github
+.agents
+.codex
+AGENTS.md
+docs
+skills
+**/.env
+**/.env.*
+**/secrets
+**/node_modules
+**/.angular
+**/dist
+**/coverage
+**/playwright-report
+**/test-results

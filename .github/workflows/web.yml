@@ -1,0 +1,108 @@
+name: Web
+
+on:
+    pull_request:
+        paths:
+            - 'apps/web/**'
+            - 'packages/contracts/**'
+            - 'tools/ci/install-web.sh'
+            - 'package*.json'
+            - 'tsconfig*.json'
+            - 'eslint.config.mjs'
+            - 'playwright.config.ts'
+            - 'go.mod'
+            - 'go.sum'
+            - '.editorconfig'
+            - '.prettier*'
+            - '.dockerignore'
+            - '.github/workflows/web.yml'
+            - '.github/workflows/container-image.yml'
+            - '.github/workflows/deploy-testing.yml'
+    push:
+        branches: [main]
+        paths:
+            - 'apps/web/**'
+            - 'packages/contracts/**'
+            - 'tools/ci/install-web.sh'
+            - 'package*.json'
+            - 'tsconfig*.json'
+            - 'eslint.config.mjs'
+            - 'playwright.config.ts'
+            - 'go.mod'
+            - 'go.sum'
+            - '.editorconfig'
+            - '.prettier*'
+            - '.dockerignore'
+            - '.github/workflows/web.yml'
+            - '.github/workflows/container-image.yml'
+            - '.github/workflows/deploy-testing.yml'
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+concurrency:
+    group: web-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    lint:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  persist-credentials: false
+            - uses: actions/setup-node@v6
+              with:
+                  node-version: '24'
+            - run: bash tools/ci/install-web.sh
+            - run: npx --no-install prettier --check apps/web packages/contracts playwright.config.ts
+            - run: npx --no-install eslint --max-warnings 0 apps/web packages/contracts playwright.config.ts
+    test:
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  persist-credentials: false
+            - uses: actions/setup-node@v6
+              with:
+                  node-version: '24'
+            - uses: actions/setup-go@v6
+              with:
+                  go-version-file: go.mod
+                  cache: false
+            - run: bash tools/ci/install-web.sh
+            - run: npm run test:unit:web
+            - run: npx --no-install playwright install --with-deps
+            - run: npm run test:e2e
+            - if: failure()
+              uses: actions/upload-artifact@v6
+              with:
+                  name: web-playwright-results
+                  path: test-results/
+                  if-no-files-found: ignore
+                  retention-days: 7
+    build:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  persist-credentials: false
+            - uses: actions/setup-node@v6
+              with:
+                  node-version: '24'
+            - run: bash tools/ci/install-web.sh
+            - run: npm run typecheck
+            - run: npm run build --workspace apps/web
+    build-image:
+        uses: ./.github/workflows/container-image.yml
+        with:
+            app: web
+    deploy-in-testing:
+        needs: [lint, test, build, build-image]
+        uses: ./.github/workflows/deploy-testing.yml
+        with:
+            app: web

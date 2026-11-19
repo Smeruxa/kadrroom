@@ -1,0 +1,39 @@
+name: Container image
+
+on:
+    workflow_call:
+        inputs:
+            app:
+                type: string
+                required: true
+
+permissions:
+    contents: read
+
+jobs:
+    build:
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  persist-credentials: false
+            - uses: helm/kind-action@v1.14.0
+              with:
+                  cluster_name: image-build
+            - uses: docker/setup-buildx-action@v4
+              with:
+                  driver: kubernetes
+            - uses: docker/build-push-action@v7
+              with:
+                  context: .
+                  file: apps/${{ inputs.app }}/Dockerfile
+                  tags: kadrroom/${{ inputs.app }}:ci
+                  outputs: type=docker,dest=${{ runner.temp }}/image.tar
+            - uses: actions/upload-artifact@v6
+              with:
+                  name: image-${{ inputs.app }}
+                  path: ${{ runner.temp }}/image.tar
+                  if-no-files-found: error
+                  overwrite: true
+                  retention-days: 7

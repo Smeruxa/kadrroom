@@ -51,9 +51,15 @@ npm run dev
 | `npm run check`        | Проверяет формат, линтеры, типы, юнит-тесты и сборку                        |
 | `npm run test:e2e`     | Запускает Go и Angular для Playwright в Chromium, Firefox и WebKit          |
 
-Перед первым запуском Playwright установи браузеры командой `npx playwright install`. GitHub Actions выполняет `npm run check` и `npm run test:e2e` на PR.
+Перед первым запуском Playwright установи браузеры командой `npx playwright install`.
 
 `npm run test:unit:web` требует 100% покрытия строк, веток и функций модуля `catalog.ts`.
+
+## CI и тестовый деплой
+
+`Web` и `Catalog API` в GitHub Actions запускаются отдельно при изменениях приложения или его зависимостей. В каждом workflow линтинг, тесты, сборка приложения и сборка Docker-образа идут параллельно. Web проверяет интеграцию с Go API через Playwright. Catalog API запускает свои Go-тесты с проверкой гонок.
+
+BuildKit собирает образ в Kubernetes. Статус `deploy-in-testing` проверяет развёртывание того же образа в отдельном временном кластере kind. Web проверяет HTML и загрузку JavaScript, Catalog API проверяет `/healthz` и контракт `/v1/catalog`. При сбое workflow выводит состояние Kubernetes и логи контейнера.
 
 ## Общие контракты
 
