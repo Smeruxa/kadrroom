@@ -1,0 +1,13 @@
+{
+    "tabWidth": 4,
+    "useTabs": false,
+    "semi": false,
+    "singleQuote": true,
+    "printWidth": 100,
+    "overrides": [
+        {
+            "files": "apps/web/src/**/*.html",
+            "options": { "parser": "angular" }
+        }
+    ]
+}

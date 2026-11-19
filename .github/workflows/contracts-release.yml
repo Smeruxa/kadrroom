@@ -1,0 +1,28 @@
+name: Contracts release
+
+on:
+    push:
+        tags: ['contracts-v*']
+
+permissions:
+    contents: write
+
+jobs:
+    release:
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        steps:
+            - uses: actions/checkout@v6
+            - uses: actions/setup-node@v6
+              with:
+                  node-version: '24'
+            - name: Verify package version and attach the tarball
+              env:
+                  CONTRACTS_TAG: ${{ github.ref_name }}
+                  GH_TOKEN: ${{ github.token }}
+              run: |
+                  set -eu
+                  VERSION=$(node -p "require('./packages/contracts/package.json').version")
+                  test "$CONTRACTS_TAG" = "contracts-v$VERSION"
+                  ARCHIVE=$(npm pack ./packages/contracts --silent)
+                  gh release create "$CONTRACTS_TAG" "$ARCHIVE" --verify-tag --generate-notes --title "Contracts $VERSION"

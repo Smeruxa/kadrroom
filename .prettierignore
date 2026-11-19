@@ -1,0 +1,12 @@
+/.agents/
+/.codex/
+/AGENTS.md
+/docs/ARCHITECTURE.md
+/skills/
+**/dist/
+**/.angular/
+**/playwright-report/
+**/test-results/
+**/coverage/
+**/secrets/
+package-lock.json

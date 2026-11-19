@@ -1,0 +1,35 @@
+{
+    "name": "kadrroom",
+    "private": true,
+    "type": "module",
+    "engines": {
+        "node": "^22.22.3 || ^24.15.0 || ^26.0.0"
+    },
+    "workspaces": [
+        "apps/web",
+        "packages/contracts"
+    ],
+    "scripts": {
+        "dev": "npm run dev --workspace apps/web",
+        "build": "npm run build --workspace apps/web",
+        "preview": "npm run preview --workspace apps/web",
+        "format": "prettier --write . && go run ./tools/format-go -write",
+        "format:check": "prettier --check . && go run ./tools/format-go",
+        "lint": "eslint --max-warnings 0 apps/web packages/contracts playwright.config.ts && golangci-lint run ./apps/... ./tools/...",
+        "typecheck": "tsc -p apps/web/tsconfig.json && tsc -p packages/contracts/tsconfig.json && tsc -p tsconfig.json",
+        "test": "npm run test:unit:web && go test -race -cover ./apps/... ./tools/...",
+        "test:unit:web": "node --experimental-test-coverage --test-coverage-include=apps/web/src/catalog.ts --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 --test apps/web/test/*.test.ts",
+        "test:e2e": "playwright test",
+        "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build"
+    },
+    "devDependencies": {
+        "@eslint/js": "^10.0.0",
+        "@playwright/test": "^1.59.0",
+        "@types/node": "^24.0.0",
+        "angular-eslint": "^22.6.0",
+        "eslint": "^10.12.0",
+        "prettier": "3.9.10",
+        "typescript": "~6.0.0",
+        "typescript-eslint": "^8.71.0"
+    }
+}

@@ -1,0 +1,28 @@
+{
+    "name": "kadrroom-desktop-frontend",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "engines": {
+        "node": "^22.22.3 || ^24.15.0 || ^26.0.0"
+    },
+    "scripts": {
+        "dev": "ng serve --host 127.0.0.1 --port 5173",
+        "build": "ng build",
+        "preview": "ng serve --configuration production --host 127.0.0.1 --port 4173"
+    },
+    "dependencies": {
+        "@angular/common": "^22.0.0",
+        "@angular/compiler": "^22.0.0",
+        "@angular/core": "^22.0.0",
+        "@angular/platform-browser": "^22.0.0",
+        "@kadrroom/contracts": "0.1.0",
+        "rxjs": "^7.8.0",
+        "tslib": "^2.3.0"
+    },
+    "devDependencies": {
+        "@angular/build": "^22.0.0",
+        "@angular/cli": "^22.0.0",
+        "@angular/compiler-cli": "^22.0.0"
+    }
+}

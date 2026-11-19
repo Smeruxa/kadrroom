@@ -1,0 +1,18 @@
+{
+    "items": [
+        {
+            "id": "last-tram",
+            "title": "Последний трамвай",
+            "description": "Вечерний маршрут через почти пустой город.",
+            "durationSeconds": 240,
+            "available": false
+        },
+        {
+            "id": "lighthouse-window",
+            "title": "Окно маяка",
+            "description": "На рассвете смотритель замечает лодку у берега.",
+            "durationSeconds": 360,
+            "available": false
+        }
+    ]
+}
