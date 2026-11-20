@@ -1,0 +1,124 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: catalog-api
+    annotations:
+        kadrroom.io/revision: bootstrap
+spec:
+    replicas: 0
+    minReadySeconds: 3
+    progressDeadlineSeconds: 180
+    strategy:
+        type: Recreate
+    selector:
+        matchLabels:
+            app: catalog-api
+    template:
+        metadata:
+            labels:
+                app: catalog-api
+        spec:
+            serviceAccountName: kadrroom-runtime
+            automountServiceAccountToken: false
+            securityContext:
+                runAsNonRoot: true
+                runAsUser: 65532
+                runAsGroup: 65532
+                fsGroup: 65532
+                seccompProfile:
+                    type: RuntimeDefault
+            containers:
+                - name: catalog-api
+                  image: ghcr.io/smeruxa/kadrroom/catalog-api@sha256:0000000000000000000000000000000000000000000000000000000000000000
+                  ports:
+                      - name: http
+                        containerPort: 8080
+                  env:
+                      - name: KADRROOM_PUBLIC_URL
+                        valueFrom:
+                            configMapKeyRef:
+                                name: public-origin
+                                key: url
+                      - name: KADRROOM_CATALOG_MEDIA_DIR
+                        value: /var/lib/kadrroom/media
+                      - name: KADRROOM_CATALOG_DATABASE_URL
+                        valueFrom:
+                            secretKeyRef:
+                                name: catalog-config
+                                key: KADRROOM_CATALOG_DATABASE_URL
+                      - name: KADRROOM_CATALOG_SIGNING_KEY
+                        valueFrom:
+                            secretKeyRef:
+                                name: catalog-config
+                                key: KADRROOM_CATALOG_SIGNING_KEY
+                      - name: KADRROOM_CATALOG_INTERNAL_TOKEN
+                        valueFrom:
+                            secretKeyRef:
+                                name: catalog-rooms-contract
+                                key: KADRROOM_CATALOG_INTERNAL_TOKEN
+                  securityContext:
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities:
+                          drop: [ALL]
+                  resources:
+                      requests:
+                          cpu: 25m
+                          memory: 32Mi
+                      limits:
+                          memory: 128Mi
+                  volumeMounts:
+                      - name: media
+                        mountPath: /var/lib/kadrroom/media
+                        readOnly: true
+                      - name: postgres-ca
+                        mountPath: /etc/kadrroom/postgres-ca
+                        readOnly: true
+                  startupProbe:
+                      httpGet:
+                          path: /healthz
+                          port: http
+                      periodSeconds: 3
+                      failureThreshold: 20
+                  readinessProbe:
+                      httpGet:
+                          path: /readyz
+                          port: http
+                      periodSeconds: 3
+                      timeoutSeconds: 3
+                  livenessProbe:
+                      httpGet:
+                          path: /healthz
+                          port: http
+                      periodSeconds: 10
+            volumes:
+                - name: media
+                  persistentVolumeClaim:
+                      claimName: catalog-media
+                - name: postgres-ca
+                  configMap:
+                      name: postgres-ca
+                      optional: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: catalog-api
+spec:
+    selector:
+        app: catalog-api
+    ports:
+        - name: http
+          port: 8080
+          targetPort: http
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+    name: catalog-media
+spec:
+    accessModes: [ReadWriteOnce]
+    storageClassName: local-path
+    resources:
+        requests:
+            storage: 20Gi

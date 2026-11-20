@@ -1,0 +1,120 @@
+name: CI
+
+on:
+    pull_request:
+        paths: &ci-paths
+            - '.github/workflows/**'
+            - 'apps/*/testing/**'
+            - 'deploy/k8s/**'
+            - 'deploy/local/**'
+            - 'tools/ci/**'
+            - 'tools/deploy/**'
+            - 'tools/local/**'
+            - 'go.mod'
+            - 'go.sum'
+    push:
+        branches: [main]
+        paths: *ci-paths
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+concurrency:
+    group: kadrroom-ci-${{ github.event_name }}-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    validate-workflows:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  persist-credentials: false
+            - uses: actions/setup-go@v6
+              with:
+                  go-version-file: go.mod
+                  cache: false
+            - run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/*.yml
+            - run: shellcheck --shell=bash tools/ci/*.sh apps/*/testing/*.sh
+            - run: shellcheck tools/local/*.sh deploy/local/*.sh
+            - run: shellcheck tools/deploy/*.sh deploy/k8s/render.sh deploy/k8s/postgres/base/*.sh
+            - name: Test release and rollback
+              run: bash tools/deploy/release.test.sh
+            - name: Render K3s manifests
+              run: |
+                  for environment in test production; do
+                      bash deploy/k8s/render.sh "$environment" "$environment.example.org" \
+                          "admin-$environment.example.org" > /dev/null
+                      kubectl kustomize "deploy/k8s/postgres/$environment" > /dev/null
+                  done
+    catalog-api:
+        if: github.event_name == 'workflow_dispatch'
+        uses: ./.github/workflows/catalog-api.yml
+        with:
+            checks-only: true
+    frontend:
+        if: github.event_name == 'workflow_dispatch'
+        uses: ./.github/workflows/frontend.yml
+        with:
+            checks-only: true
+    identity-api:
+        if: github.event_name == 'workflow_dispatch'
+        uses: ./.github/workflows/identity-api.yml
+        with:
+            checks-only: true
+    rooms-api:
+        if: github.event_name == 'workflow_dispatch'
+        uses: ./.github/workflows/rooms-api.yml
+        with:
+            checks-only: true
+    admin-api:
+        if: github.event_name == 'workflow_dispatch'
+        uses: ./.github/workflows/admin-api.yml
+        with:
+            checks-only: true
+    admin-frontend:
+        if: github.event_name == 'workflow_dispatch'
+        uses: ./.github/workflows/admin-frontend.yml
+        with:
+            checks-only: true
+    media-worker:
+        if: github.event_name == 'workflow_dispatch'
+        uses: ./.github/workflows/media-worker.yml
+        with:
+            checks-only: true
+    build-images:
+        if: github.event_name == 'workflow_dispatch'
+        strategy:
+            fail-fast: false
+            matrix:
+                app:
+                    - catalog-api
+                    - identity-api
+                    - rooms-api
+                    - frontend
+                    - admin-api
+                    - admin-frontend
+                    - media-worker
+        uses: ./.github/workflows/container-image.yml
+        with:
+            app: ${{ matrix.app }}
+    playwright:
+        needs: build-images
+        uses: ./.github/workflows/playwright.yml
+        with:
+            use-built-images: true
+    deploy-catalog-api:
+        needs: [validate-workflows, catalog-api, build-images]
+        uses: ./.github/workflows/deploy-testing.yml
+        with:
+            app: catalog-api
+    deploy-frontend:
+        needs: [validate-workflows, catalog-api, frontend, build-images]
+        uses: ./.github/workflows/deploy-testing.yml
+        with:
+            app: frontend
+    deploy-stack:
+        needs: [validate-workflows, build-images]
+        uses: ./.github/workflows/deploy-stack-testing.yml

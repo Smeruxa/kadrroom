@@ -1,0 +1,44 @@
+name: Admin API
+
+on:
+    pull_request:
+        paths: &admin-paths
+            - 'apps/admin-api/**'
+            - 'internal/catalogmedia/**'
+            - 'tools/ci/check-go-format.sh'
+            - 'go.mod'
+            - 'go.sum'
+            - '.golangci.yml'
+            - '.dockerignore'
+            - '.github/workflows/admin-api.yml'
+            - '.github/workflows/go-postgres.yml'
+            - '.github/workflows/container-image.yml'
+    push:
+        branches: [main]
+        paths: *admin-paths
+    workflow_dispatch:
+    workflow_call:
+        inputs:
+            checks-only:
+                type: boolean
+                default: false
+
+permissions:
+    contents: read
+
+concurrency:
+    group: admin-api-${{ inputs.checks-only && 'checks' || 'app' }}-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    check:
+        uses: ./.github/workflows/go-postgres.yml
+        with:
+            app: admin-api
+            database: admin_test
+            database-url-variable: KADRROOM_CATALOG_TEST_DATABASE_URL
+    build-image:
+        if: ${{ !inputs.checks-only }}
+        uses: ./.github/workflows/container-image.yml
+        with:
+            app: admin-api

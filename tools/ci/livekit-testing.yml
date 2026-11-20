@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: livekit
+spec:
+    replicas: 1
+    selector:
+        matchLabels:
+            app: livekit
+    template:
+        metadata:
+            labels:
+                app: livekit
+        spec:
+            automountServiceAccountToken: false
+            enableServiceLinks: false
+            securityContext:
+                runAsNonRoot: true
+                runAsUser: 65532
+                runAsGroup: 65532
+                seccompProfile:
+                    type: RuntimeDefault
+            containers:
+                - name: livekit
+                  image: livekit/livekit-server:v1.13.11
+                  args: [--node-ip, '127.0.0.1']
+                  ports:
+                      - name: signal
+                        containerPort: 7880
+                  env:
+                      - name: LIVEKIT_CONFIG
+                        valueFrom:
+                            configMapKeyRef:
+                                name: livekit-server
+                                key: config
+                      - name: LIVEKIT_KEYS
+                        valueFrom:
+                            secretKeyRef:
+                                name: livekit-config
+                                key: LIVEKIT_KEYS
+                  securityContext:
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities:
+                          drop: [ALL]
+                  readinessProbe:
+                      httpGet:
+                          path: /
+                          port: signal
+                      periodSeconds: 3
+                  resources:
+                      requests:
+                          cpu: 25m
+                          memory: 32Mi
+                      limits:
+                          memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: livekit
+spec:
+    selector:
+        app: livekit
+    ports:
+        - name: signal
+          port: 7880
+          targetPort: signal

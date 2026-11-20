@@ -13,7 +13,7 @@ permissions:
 jobs:
     deploy-and-smoke-test:
         runs-on: ubuntu-latest
-        timeout-minutes: 10
+        timeout-minutes: 15
         env:
             APP: ${{ inputs.app }}
         steps:
@@ -22,30 +22,29 @@ jobs:
                   persist-credentials: false
             - uses: actions/download-artifact@v7
               with:
-                  name: image-${{ inputs.app }}
-                  path: ${{ runner.temp }}
+                  name: image-catalog-api
+                  path: ${{ runner.temp }}/kadrroom-images/image-catalog-api
+            - uses: actions/download-artifact@v7
+              if: inputs.app == 'frontend'
+              with:
+                  name: image-frontend
+                  path: ${{ runner.temp }}/kadrroom-images/image-frontend
             - uses: helm/kind-action@v1.14.0
               with:
                   cluster_name: testing
-            - name: Deploy and wait for readiness
+                  wait: 120s
+            - name: Deploy and verify the application
               run: |
-                  kind load image-archive "$RUNNER_TEMP/image.tar" --name testing
-                  kubectl apply -f "apps/$APP/testing/kubernetes.yml"
-                  kubectl rollout status "deployment/$APP" --timeout=120s
-            - name: Smoke test the service
-              run: |
-                  kubectl port-forward --address 127.0.0.1 "service/$APP" 18080:8080 > "$RUNNER_TEMP/port-forward.log" 2>&1 &
-                  forward_pid=$!
-                  trap 'kill "$forward_pid" 2>/dev/null || true' EXIT
-                  curl --fail --silent --show-error --max-time 5 --retry 10 --retry-connrefused --retry-delay 1 \
-                      http://127.0.0.1:18080/healthz > /dev/null
-                  bash "apps/$APP/testing/smoke.sh" http://127.0.0.1:18080
-            - name: Show deployment diagnostics
+                  bash tools/ci/test-deploy.sh "$APP" testing \
+                      "$RUNNER_TEMP/kadrroom-images" "$RUNNER_TEMP/kadrroom-testing"
+            - name: Collect kind diagnostics
               if: failure()
-              run: |
-                  kubectl get pods,services -o wide || true
-                  kubectl describe "deployment/$APP" || true
-                  kubectl logs "deployment/$APP" --all-containers --tail=100 || true
-                  if [[ -f "$RUNNER_TEMP/port-forward.log" ]]; then
-                      cat "$RUNNER_TEMP/port-forward.log"
-                  fi
+              run: kind export logs "$RUNNER_TEMP/kadrroom-testing/kind" --name testing || true
+            - uses: actions/upload-artifact@v6
+              if: failure()
+              with:
+                  name: testing-${{ inputs.app }}-diagnostics
+                  path: ${{ runner.temp }}/kadrroom-testing/
+                  if-no-files-found: ignore
+                  overwrite: true
+                  retention-days: 7

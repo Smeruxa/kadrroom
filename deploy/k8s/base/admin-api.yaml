@@ -1,0 +1,110 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: admin-api
+    annotations:
+        kadrroom.io/revision: bootstrap
+spec:
+    replicas: 0
+    minReadySeconds: 3
+    progressDeadlineSeconds: 180
+    strategy:
+        type: Recreate
+    selector:
+        matchLabels:
+            app: admin-api
+    template:
+        metadata:
+            labels:
+                app: admin-api
+        spec:
+            serviceAccountName: kadrroom-runtime
+            automountServiceAccountToken: false
+            securityContext:
+                runAsNonRoot: true
+                runAsUser: 65532
+                runAsGroup: 65532
+                fsGroup: 65532
+                seccompProfile:
+                    type: RuntimeDefault
+            containers:
+                - name: admin-api
+                  image: ghcr.io/smeruxa/kadrroom/admin-api@sha256:0000000000000000000000000000000000000000000000000000000000000000
+                  ports:
+                      - name: http
+                        containerPort: 8083
+                  env:
+                      - name: KADRROOM_ADMIN_ADDR
+                        value: 0.0.0.0:8083
+                      - name: KADRROOM_ADMIN_PUBLIC_URL
+                        valueFrom:
+                            configMapKeyRef:
+                                name: admin-origin
+                                key: url
+                      - name: KADRROOM_IDENTITY_URL
+                        value: http://identity-api:8081
+                      - name: KADRROOM_CATALOG_MEDIA_DIR
+                        value: /var/lib/kadrroom/media
+                      - name: KADRROOM_CATALOG_READER_ROLE
+                        value: catalog_read
+                      - name: KADRROOM_CATALOG_WORKER_ROLE
+                        value: catalog_worker
+                      - name: KADRROOM_ADMIN_DATABASE_URL
+                        valueFrom:
+                            secretKeyRef:
+                                name: admin-config
+                                key: KADRROOM_ADMIN_DATABASE_URL
+                  securityContext:
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities:
+                          drop: [ALL]
+                  resources:
+                      requests:
+                          cpu: 25m
+                          memory: 32Mi
+                      limits:
+                          memory: 128Mi
+                  volumeMounts:
+                      - name: media
+                        mountPath: /var/lib/kadrroom/media
+                      - name: postgres-ca
+                        mountPath: /etc/kadrroom/postgres-ca
+                        readOnly: true
+                  startupProbe:
+                      httpGet:
+                          path: /healthz
+                          port: http
+                      periodSeconds: 3
+                      failureThreshold: 20
+                  readinessProbe:
+                      httpGet:
+                          path: /readyz
+                          port: http
+                      periodSeconds: 3
+                      timeoutSeconds: 3
+                  livenessProbe:
+                      httpGet:
+                          path: /healthz
+                          port: http
+                      periodSeconds: 10
+            volumes:
+                - name: media
+                  persistentVolumeClaim:
+                      claimName: catalog-media
+                - name: postgres-ca
+                  configMap:
+                      name: postgres-ca
+                      optional: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: admin-api
+spec:
+    selector:
+        app: admin-api
+    ports:
+        - name: http
+          port: 8083
+          targetPort: http

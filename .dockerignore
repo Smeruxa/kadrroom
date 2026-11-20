@@ -5,8 +5,10 @@
 AGENTS.md
 docs
 skills
+**/.DS_Store
 **/.env
 **/.env.*
+**/*.log
 **/secrets
 **/node_modules
 **/.angular

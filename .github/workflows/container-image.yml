@@ -21,15 +21,35 @@ jobs:
             - uses: helm/kind-action@v1.14.0
               with:
                   cluster_name: image-build
+                  wait: 120s
+            - name: Create build namespace
+              run: kubectl --context kind-image-build create namespace buildkit
             - uses: docker/setup-buildx-action@v4
+              id: buildx
               with:
                   driver: kubernetes
+                  driver-opts: namespace=buildkit
             - uses: docker/build-push-action@v7
               with:
+                  builder: ${{ steps.buildx.outputs.name }}
                   context: .
                   file: apps/${{ inputs.app }}/Dockerfile
                   tags: kadrroom/${{ inputs.app }}:ci
+                  labels: org.opencontainers.image.revision=${{ github.sha }}
                   outputs: type=docker,dest=${{ runner.temp }}/image.tar
+            - name: Verify shared Nginx templates in the image
+              if: inputs.app == 'frontend' || inputs.app == 'admin-frontend'
+              env:
+                  APP: ${{ inputs.app }}
+              run: |
+                  docker image load --input "$RUNNER_TEMP/image.tar"
+                  container=$(docker create "kadrroom/$APP:ci")
+                  trap 'docker rm "$container" > /dev/null' EXIT
+                  for template in api proxy-context; do
+                      docker cp "$container:/etc/nginx/templates/kadrroom-$template.conf.template" \
+                          "$RUNNER_TEMP/nginx-$template.conf"
+                      cmp "apps/frontend/nginx-$template.conf" "$RUNNER_TEMP/nginx-$template.conf"
+                  done
             - uses: actions/upload-artifact@v6
               with:
                   name: image-${{ inputs.app }}
@@ -37,3 +57,9 @@ jobs:
                   if-no-files-found: error
                   overwrite: true
                   retention-days: 7
+            - name: Show BuildKit diagnostics
+              if: failure()
+              run: |
+                  kubectl --context kind-image-build -n buildkit get deployments,pods,events -o wide || true
+                  kubectl --context kind-image-build -n buildkit describe pods || true
+                  kubectl --context kind-image-build -n buildkit logs -l app --all-containers --tail=100 || true

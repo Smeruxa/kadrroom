@@ -1,0 +1,175 @@
+services:
+    frontend:
+        image: kadrroom/frontend:local
+        build:
+            context: ../..
+            dockerfile: apps/frontend/Dockerfile
+        environment:
+            KADRROOM_AUTH_PROXY_TOKEN: ${KADRROOM_AUTH_PROXY_TOKEN:?}
+        ports:
+            - '127.0.0.1:${KADRROOM_WEB_PORT:?}:8080'
+        depends_on:
+            - catalog-api
+            - identity-api
+            - rooms-api
+    admin-frontend:
+        image: kadrroom/admin-frontend:local
+        build:
+            context: ../..
+            dockerfile: apps/admin-frontend/Dockerfile
+        environment:
+            KADRROOM_AUTH_PROXY_TOKEN: ${KADRROOM_AUTH_PROXY_TOKEN:?}
+        ports:
+            - '127.0.0.1:${KADRROOM_ADMIN_WEB_PORT:?}:8080'
+        depends_on:
+            - admin-api
+            - identity-api
+    admin-api:
+        image: kadrroom/admin-api:local
+        build:
+            context: ../..
+            dockerfile: apps/admin-api/Dockerfile
+        environment:
+            KADRROOM_ADMIN_DATABASE_URL: postgres://catalog:${KADRROOM_CATALOG_DB_PASSWORD:?}@db:5432/catalog?sslmode=disable
+            KADRROOM_ADMIN_PUBLIC_URL: http://${KADRROOM_SITE_HOST:-127.0.0.1}:${KADRROOM_ADMIN_WEB_PORT:?}
+            KADRROOM_IDENTITY_URL: http://identity-api:8081
+            KADRROOM_CATALOG_MEDIA_DIR: /var/lib/kadrroom/media
+            KADRROOM_CATALOG_READER_ROLE: catalog_read
+            KADRROOM_CATALOG_WORKER_ROLE: catalog_worker
+        volumes:
+            - media:/var/lib/kadrroom/media
+        depends_on:
+            db-setup:
+                condition: service_completed_successfully
+            identity-api:
+                condition: service_started
+    catalog-api:
+        image: kadrroom/catalog-api:local
+        build:
+            context: ../..
+            dockerfile: apps/catalog-api/Dockerfile
+        environment:
+            KADRROOM_CATALOG_DATABASE_URL: postgres://catalog_read:${KADRROOM_CATALOG_READ_DB_PASSWORD:?}@db:5432/catalog?sslmode=disable
+            KADRROOM_CATALOG_INTERNAL_TOKEN: ${KADRROOM_CATALOG_INTERNAL_TOKEN:?}
+            KADRROOM_CATALOG_MEDIA_DIR: /var/lib/kadrroom/media
+            KADRROOM_PUBLIC_URL: http://${KADRROOM_SITE_HOST:-127.0.0.1}:${KADRROOM_WEB_PORT:?}
+        volumes:
+            - media:/var/lib/kadrroom/media:ro
+        depends_on:
+            admin-api:
+                condition: service_started
+    media-worker:
+        image: kadrroom/media-worker:local
+        build:
+            context: ../..
+            dockerfile: apps/media-worker/Dockerfile
+        environment:
+            KADRROOM_CATALOG_DATABASE_URL: postgres://catalog_worker:${KADRROOM_CATALOG_WORKER_DB_PASSWORD:?}@db:5432/catalog?sslmode=disable
+            KADRROOM_CATALOG_MEDIA_DIR: /var/lib/kadrroom/media
+        volumes:
+            - media:/var/lib/kadrroom/media
+        depends_on:
+            db-setup:
+                condition: service_completed_successfully
+            admin-api:
+                condition: service_started
+    identity-api:
+        image: kadrroom/identity-api:local
+        build:
+            context: ../..
+            dockerfile: apps/identity-api/Dockerfile
+        environment:
+            KADRROOM_IDENTITY_DATABASE_URL: postgres://identity:${KADRROOM_IDENTITY_DB_PASSWORD:?}@db:5432/identity?sslmode=disable
+            KADRROOM_MAIL_TOKEN_KEY: ${KADRROOM_MAIL_TOKEN_KEY:?}
+            KADRROOM_AUTH_PROXY_TOKEN: ${KADRROOM_AUTH_PROXY_TOKEN:?}
+            KADRROOM_PUBLIC_URL: http://${KADRROOM_SITE_HOST:-127.0.0.1}:${KADRROOM_WEB_PORT:?}
+            KADRROOM_ADMIN_PUBLIC_URL: http://${KADRROOM_SITE_HOST:-127.0.0.1}:${KADRROOM_ADMIN_WEB_PORT:?}
+            KADRROOM_SECURE_COOKIES: 'false'
+            KADRROOM_SMTP_ADDR: mail:1025
+            KADRROOM_SMTP_FROM: kadrroom@example.test
+            KADRROOM_SMTP_TLS: none
+            KADRROOM_OPERATOR_EMAIL: ${KADRROOM_OPERATOR_EMAIL:-operator@example.test}
+        depends_on:
+            db-setup:
+                condition: service_completed_successfully
+            mail:
+                condition: service_started
+    rooms-api:
+        image: kadrroom/rooms-api:local
+        build:
+            context: ../..
+            dockerfile: apps/rooms-api/Dockerfile
+        environment:
+            KADRROOM_ROOMS_DATABASE_URL: postgres://rooms:${KADRROOM_ROOMS_DB_PASSWORD:?}@db:5432/rooms?sslmode=disable
+            KADRROOM_PUBLIC_URL: http://${KADRROOM_SITE_HOST:-127.0.0.1}:${KADRROOM_WEB_PORT:?}
+            KADRROOM_SECURE_COOKIES: 'false'
+            KADRROOM_IDENTITY_URL: http://identity-api:8081
+            KADRROOM_CATALOG_URL: http://catalog-api:8080
+            KADRROOM_CATALOG_INTERNAL_TOKEN: ${KADRROOM_CATALOG_INTERNAL_TOKEN:?}
+            KADRROOM_LIVEKIT_URL: ws://127.0.0.1:${KADRROOM_RTC_PORT:?}
+            KADRROOM_LIVEKIT_INTERNAL_URL: http://livekit:${KADRROOM_RTC_PORT:?}
+            KADRROOM_LIVEKIT_API_KEY: kadrroom-local
+            KADRROOM_LIVEKIT_API_SECRET: ${KADRROOM_LIVEKIT_API_SECRET:?}
+            KADRROOM_DEMO_MEDIA_URLS: '{"last-tram":"/demo-media/last-tram.mp4","blue-light":"/demo-media/blue-light.m4a"}'
+        depends_on:
+            db-setup:
+                condition: service_completed_successfully
+            catalog-api:
+                condition: service_started
+            identity-api:
+                condition: service_started
+    db:
+        image: postgres:16-alpine
+        environment:
+            POSTGRES_USER: kadrroom
+            POSTGRES_PASSWORD: ${KADRROOM_DB_PASSWORD:?}
+        volumes:
+            - database:/var/lib/postgresql/data
+        healthcheck:
+            test: [CMD-SHELL, 'pg_isready -h 127.0.0.1 -U kadrroom -d postgres']
+            interval: 2s
+            timeout: 2s
+            retries: 25
+    db-setup:
+        image: postgres:16-alpine
+        entrypoint: ['/bin/sh', '/opt/kadrroom/init-databases.sh']
+        environment:
+            POSTGRES_USER: kadrroom
+            PGHOST: db
+            PGPASSWORD: ${KADRROOM_DB_PASSWORD:?}
+            KADRROOM_IDENTITY_DB_PASSWORD: ${KADRROOM_IDENTITY_DB_PASSWORD:?}
+            KADRROOM_ROOMS_DB_PASSWORD: ${KADRROOM_ROOMS_DB_PASSWORD:?}
+            KADRROOM_CATALOG_DB_PASSWORD: ${KADRROOM_CATALOG_DB_PASSWORD:?}
+            KADRROOM_CATALOG_READ_DB_PASSWORD: ${KADRROOM_CATALOG_READ_DB_PASSWORD:?}
+            KADRROOM_CATALOG_WORKER_DB_PASSWORD: ${KADRROOM_CATALOG_WORKER_DB_PASSWORD:?}
+        volumes:
+            - ./init-databases.sh:/opt/kadrroom/init-databases.sh:ro
+            - media:/var/lib/kadrroom/media
+        depends_on:
+            db:
+                condition: service_healthy
+    mail:
+        image: axllent/mailpit:v1.34.0
+        ports:
+            - '127.0.0.1:${KADRROOM_MAIL_PORT:?}:8025'
+    livekit:
+        image: livekit/livekit-server:v1.13.11
+        command: [--node-ip, '127.0.0.1']
+        environment:
+            LIVEKIT_KEYS: 'kadrroom-local: ${KADRROOM_LIVEKIT_API_SECRET:?}'
+            LIVEKIT_CONFIG: |
+                port: ${KADRROOM_RTC_PORT:?}
+                room:
+                    auto_create: false
+                rtc:
+                    tcp_port: ${KADRROOM_RTC_TCP_PORT:?}
+                    udp_port: ${KADRROOM_RTC_UDP_PORT:?}
+                    use_external_ip: false
+        ports:
+            - '127.0.0.1:${KADRROOM_RTC_PORT:?}:${KADRROOM_RTC_PORT:?}'
+            - '127.0.0.1:${KADRROOM_RTC_TCP_PORT:?}:${KADRROOM_RTC_TCP_PORT:?}'
+            - '127.0.0.1:${KADRROOM_RTC_UDP_PORT:?}:${KADRROOM_RTC_UDP_PORT:?}/udp'
+
+volumes:
+    database:
+    media:

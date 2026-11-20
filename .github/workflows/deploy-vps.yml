@@ -1,0 +1,202 @@
+name: Deploy VPS
+run-name: Deploy ${{ inputs.environment }} from CI run ${{ inputs.ci_run_id }}
+
+on:
+    workflow_dispatch:
+        inputs:
+            environment:
+                description: Окружение на VPS
+                type: choice
+                required: true
+                options: [test, production]
+            ci_run_id:
+                description: ID успешного ручного прогона CI на main
+                type: string
+                required: true
+
+permissions: {}
+
+jobs:
+    deploy:
+        if: github.ref == 'refs/heads/main'
+        runs-on: ubuntu-latest
+        timeout-minutes: 50
+        environment: ${{ inputs.environment }}
+        concurrency:
+            group: kadrroom-vps-${{ inputs.environment }}
+            cancel-in-progress: false
+        permissions:
+            actions: read
+            packages: write
+        steps:
+            - name: Verify full CI run
+              id: ci
+              shell: bash
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  CI_RUN_ID: ${{ inputs.ci_run_id }}
+              run: |
+                  if [[ ! "$CI_RUN_ID" =~ ^[1-9][0-9]*$ ]]; then
+                      echo 'CI run ID must be a positive integer.' >&2
+                      exit 1
+                  fi
+
+                  run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CI_RUN_ID")"
+                  if ! commit="$(jq -er --arg repository "$GITHUB_REPOSITORY" '
+                      select(.path == ".github/workflows/ci.yml"
+                          and .event == "workflow_dispatch"
+                          and .head_repository.full_name == $repository
+                          and .head_branch == "main"
+                          and .status == "completed"
+                          and .conclusion == "success")
+                      | .head_sha | select(test("^[0-9a-f]{40}$"))
+                  ' <<< "$run")"; then
+                      echo 'Run a full CI workflow manually on main and wait for it to succeed.' >&2
+                      exit 1
+                  fi
+
+                  attempt="$(jq -er '.run_attempt | select(type == "number" and . > 0)' <<< "$run")"
+                  printf 'commit=%s\nattempt=%s\n' "$commit" "$attempt" >> "$GITHUB_OUTPUT"
+            - uses: actions/download-artifact@v7
+              with:
+                  github-token: ${{ github.token }}
+                  run-id: ${{ inputs.ci_run_id }}
+                  pattern: image-*
+                  path: ${{ runner.temp }}/kadrroom-images
+            - name: Confirm the CI run did not change during download
+              shell: bash
+              env:
+                  GH_TOKEN: ${{ github.token }}
+                  CI_RUN_ID: ${{ inputs.ci_run_id }}
+                  CI_ATTEMPT: ${{ steps.ci.outputs.attempt }}
+              run: |
+                  if ! gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CI_RUN_ID" |
+                      jq -e --argjson attempt "$CI_ATTEMPT" \
+                          '.run_attempt == $attempt and .conclusion == "success"' >/dev/null; then
+                      echo 'The CI run changed during download. Retry after CI succeeds.' >&2
+                      exit 1
+                  fi
+            - name: Publish the verified CI images
+              id: publish
+              shell: bash
+              env:
+                  GHCR_TOKEN: ${{ github.token }}
+                  COMMIT: ${{ steps.ci.outputs.commit }}
+              run: |
+                  registry="ghcr.io/$(tr '[:upper:]' '[:lower:]' <<< "$GITHUB_REPOSITORY")"
+                  tag="$COMMIT-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+                  apps=(frontend catalog-api identity-api rooms-api admin-frontend admin-api media-worker)
+                  configs=()
+
+                  for app in "${apps[@]}"; do
+                      archive="$RUNNER_TEMP/kadrroom-images/image-$app/image.tar"
+                      if [[ ! -s "$archive" ]]; then
+                          echo "CI archive is missing for $app." >&2
+                          exit 1
+                      fi
+                      docker image load --input "$archive"
+                      metadata="$(docker image inspect --format '{{.Id}} {{.Os}}/{{.Architecture}} {{index .Config.Labels "org.opencontainers.image.revision"}}' "kadrroom/$app:ci")"
+                      read -r config platform revision <<< "$metadata"
+                      if [[ ! "$config" =~ ^sha256:[0-9a-f]{64}$ ||
+                          "$platform" != linux/amd64 || "$revision" != "$COMMIT" ]]; then
+                          echo "CI image for $app has an unexpected image ID, platform or commit." >&2
+                          exit 1
+                      fi
+                      configs+=("$config")
+                  done
+
+                  printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+                  unset GHCR_TOKEN
+                  trap 'docker logout ghcr.io >/dev/null' EXIT
+
+                  references=()
+                  for index in "${!apps[@]}"; do
+                      app="${apps[$index]}"
+                      config="${configs[$index]}"
+                      image="$registry/$app"
+                      docker image tag "$config" "$image:$tag"
+                      docker image push --platform linux/amd64 "$image:$tag"
+                      digest="$(docker buildx imagetools inspect --format '{{.Manifest.Digest}}' "$image:$tag")"
+                      if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+                          echo "GHCR did not return a manifest digest for $app." >&2
+                          exit 1
+                      fi
+
+                      if ! docker buildx imagetools inspect --raw "$image@$digest" |
+                          jq -e --arg config "$config" '.config.digest == $config' >/dev/null; then
+                          echo "The GHCR manifest for $app references an unexpected image." >&2
+                          exit 1
+                      fi
+
+                      printf '%s_digest=%s\n' "${app//-/_}" "$digest" >> "$GITHUB_OUTPUT"
+                      references+=("$image@$digest")
+                  done
+
+                  {
+                      printf "### Published images\n\nCommit \`%s\`\n\n" "$COMMIT"
+                      printf -- "- \`%s\`\n" "${references[@]}"
+                  } >> "$GITHUB_STEP_SUMMARY"
+
+            - name: Request deployment by SSH
+              shell: bash
+              env:
+                  SSH_HOST: ${{ vars.VPS_SSH_HOST }}
+                  SSH_PORT: ${{ vars.VPS_SSH_PORT }}
+                  SSH_USER: ${{ vars.VPS_SSH_USER }}
+                  DEPLOY_ENVIRONMENT: ${{ inputs.environment }}
+                  SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+                  SSH_KNOWN_HOSTS: ${{ secrets.VPS_SSH_KNOWN_HOSTS }}
+                  COMMIT: ${{ steps.ci.outputs.commit }}
+                  FRONTEND: ${{ steps.publish.outputs.frontend_digest }}
+                  CATALOG_API: ${{ steps.publish.outputs.catalog_api_digest }}
+                  IDENTITY_API: ${{ steps.publish.outputs.identity_api_digest }}
+                  ROOMS_API: ${{ steps.publish.outputs.rooms_api_digest }}
+                  ADMIN_FRONTEND: ${{ steps.publish.outputs.admin_frontend_digest }}
+                  ADMIN_API: ${{ steps.publish.outputs.admin_api_digest }}
+                  MEDIA_WORKER: ${{ steps.publish.outputs.media_worker_digest }}
+              run: |
+                  port="${SSH_PORT:-22}"
+                  if [[ "$SSH_USER" != "kadrroom-deploy-$DEPLOY_ENVIRONMENT" ]]; then
+                      echo 'Configure VPS_SSH_USER for the selected Environment.' >&2
+                      exit 1
+                  fi
+                  if [[ ! "$SSH_HOST" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*$ ||
+                      ! "$port" =~ ^[1-9][0-9]{0,4}$ ]] || (( port > 65535 )); then
+                      echo 'Configure a valid VPS SSH host and port in the Environment.' >&2
+                      exit 1
+                  fi
+                  if [[ -z "$SSH_PRIVATE_KEY" || -z "$SSH_KNOWN_HOSTS" ]]; then
+                      echo 'Configure the SSH key and pinned known_hosts entry in the Environment.' >&2
+                      exit 1
+                  fi
+                  if [[ ! "$COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+                      echo 'The deployment commit is invalid.' >&2
+                      exit 1
+                  fi
+                  digests=(
+                      "$FRONTEND" "$CATALOG_API" "$IDENTITY_API" "$ROOMS_API"
+                      "$ADMIN_FRONTEND" "$ADMIN_API" "$MEDIA_WORKER"
+                  )
+                  for digest in "${digests[@]}"; do
+                      if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+                          echo 'A deployment digest is invalid.' >&2
+                          exit 1
+                      fi
+                  done
+
+                  umask 077
+                  ssh_dir="$(mktemp -d "$RUNNER_TEMP/kadrroom-ssh.XXXXXX")"
+                  trap 'rm -rf -- "$ssh_dir"' EXIT
+                  printf '%s\n' "$SSH_PRIVATE_KEY" > "$ssh_dir/key"
+                  printf '%s\n' "$SSH_KNOWN_HOSTS" > "$ssh_dir/known_hosts"
+                  unset SSH_PRIVATE_KEY SSH_KNOWN_HOSTS
+
+                  ssh -F /dev/null -nT -p "$port" -l "$SSH_USER" \
+                      -i "$ssh_dir/key" \
+                      -o "UserKnownHostsFile=$ssh_dir/known_hosts" \
+                      -o GlobalKnownHostsFile=/dev/null \
+                      -o StrictHostKeyChecking=yes -o UpdateHostKeys=no \
+                      -o BatchMode=yes -o IdentitiesOnly=yes -o IdentityAgent=none \
+                      -o ClearAllForwardings=yes -o ConnectTimeout=15 \
+                      -o ServerAliveInterval=15 -o ServerAliveCountMax=4 \
+                      -- "$SSH_HOST" deploy "$COMMIT" "${digests[@]}"

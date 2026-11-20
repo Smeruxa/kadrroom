@@ -1,0 +1,117 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: identity-api
+    annotations:
+        kadrroom.io/revision: bootstrap
+spec:
+    replicas: 0
+    minReadySeconds: 3
+    progressDeadlineSeconds: 180
+    strategy:
+        rollingUpdate:
+            maxSurge: 1
+            maxUnavailable: 0
+    selector:
+        matchLabels:
+            app: identity-api
+    template:
+        metadata:
+            labels:
+                app: identity-api
+        spec:
+            serviceAccountName: kadrroom-runtime
+            automountServiceAccountToken: false
+            securityContext:
+                runAsNonRoot: true
+                seccompProfile:
+                    type: RuntimeDefault
+            containers:
+                - name: identity-api
+                  image: ghcr.io/smeruxa/kadrroom/identity-api@sha256:0000000000000000000000000000000000000000000000000000000000000000
+                  ports:
+                      - name: http
+                        containerPort: 8081
+                  env:
+                      - name: KADRROOM_PUBLIC_URL
+                        valueFrom:
+                            configMapKeyRef:
+                                name: public-origin
+                                key: url
+                      - name: KADRROOM_ADMIN_PUBLIC_URL
+                        valueFrom:
+                            configMapKeyRef:
+                                name: admin-origin
+                                key: url
+                      - name: KADRROOM_SECURE_COOKIES
+                        value: 'true'
+                      - name: KADRROOM_IDENTITY_DATABASE_URL
+                        valueFrom:
+                            secretKeyRef:
+                                name: identity-config
+                                key: KADRROOM_IDENTITY_DATABASE_URL
+                      - name: KADRROOM_MAIL_TOKEN_KEY
+                        valueFrom:
+                            secretKeyRef:
+                                name: identity-config
+                                key: KADRROOM_MAIL_TOKEN_KEY
+                      - name: KADRROOM_AUTH_PROXY_TOKEN
+                        valueFrom:
+                            secretKeyRef:
+                                name: auth-proxy-config
+                                key: KADRROOM_AUTH_PROXY_TOKEN
+                      - name: KADRROOM_OPERATOR_EMAIL
+                        valueFrom:
+                            secretKeyRef:
+                                name: identity-config
+                                key: KADRROOM_OPERATOR_EMAIL
+                                optional: true
+                  securityContext:
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities:
+                          drop: [ALL]
+                  resources:
+                      requests:
+                          cpu: 50m
+                          memory: 128Mi
+                      limits:
+                          memory: 512Mi
+                  volumeMounts:
+                      - name: postgres-ca
+                        mountPath: /etc/kadrroom/postgres-ca
+                        readOnly: true
+                  startupProbe:
+                      httpGet:
+                          path: /healthz
+                          port: http
+                      periodSeconds: 3
+                      failureThreshold: 20
+                  readinessProbe:
+                      httpGet:
+                          path: /readyz
+                          port: http
+                      periodSeconds: 3
+                      timeoutSeconds: 3
+                  livenessProbe:
+                      httpGet:
+                          path: /healthz
+                          port: http
+                      periodSeconds: 10
+            volumes:
+                - name: postgres-ca
+                  configMap:
+                      name: postgres-ca
+                      optional: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: identity-api
+spec:
+    selector:
+        app: identity-api
+    ports:
+        - name: http
+          port: 8081
+          targetPort: http

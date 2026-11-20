@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: media-worker
+    annotations:
+        kadrroom.io/revision: bootstrap
+spec:
+    replicas: 0
+    minReadySeconds: 3
+    progressDeadlineSeconds: 180
+    strategy:
+        type: Recreate
+    selector:
+        matchLabels:
+            app: media-worker
+    template:
+        metadata:
+            labels:
+                app: media-worker
+        spec:
+            serviceAccountName: kadrroom-runtime
+            automountServiceAccountToken: false
+            securityContext:
+                runAsNonRoot: true
+                runAsUser: 65532
+                runAsGroup: 65532
+                fsGroup: 65532
+                seccompProfile:
+                    type: RuntimeDefault
+            containers:
+                - name: media-worker
+                  image: ghcr.io/smeruxa/kadrroom/media-worker@sha256:0000000000000000000000000000000000000000000000000000000000000000
+                  env:
+                      - name: KADRROOM_CATALOG_DATABASE_URL
+                        valueFrom:
+                            secretKeyRef:
+                                name: media-worker-config
+                                key: KADRROOM_CATALOG_DATABASE_URL
+                      - name: KADRROOM_CATALOG_MEDIA_DIR
+                        value: /var/lib/kadrroom/media
+                  securityContext:
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities:
+                          drop: [ALL]
+                  resources:
+                      requests:
+                          cpu: 100m
+                          memory: 128Mi
+                      limits:
+                          memory: 1Gi
+                  volumeMounts:
+                      - name: media
+                        mountPath: /var/lib/kadrroom/media
+                      - name: postgres-ca
+                        mountPath: /etc/kadrroom/postgres-ca
+                        readOnly: true
+                      - name: tmp
+                        mountPath: /tmp
+                  readinessProbe:
+                      exec:
+                          command: [test, -w, /var/lib/kadrroom/media]
+                      periodSeconds: 3
+            volumes:
+                - name: media
+                  persistentVolumeClaim:
+                      claimName: catalog-media
+                - name: postgres-ca
+                  configMap:
+                      name: postgres-ca
+                      optional: true
+                - name: tmp
+                  emptyDir:
+                      sizeLimit: 64Mi

@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+    - admin-api.yaml
+    - admin-frontend.yaml
+    - catalog-api.yaml
+    - frontend.yaml
+    - identity-api.yaml
+    - ingress.yaml
+    - media-worker.yaml
+    - network-policy.yaml
+    - rooms-api.yaml
+    - service-accounts.yaml

@@ -1,0 +1,43 @@
+name: Identity API
+
+on:
+    pull_request:
+        paths: &identity-paths
+            - 'apps/identity-api/**'
+            - 'tools/ci/check-go-format.sh'
+            - 'go.mod'
+            - 'go.sum'
+            - '.golangci.yml'
+            - '.dockerignore'
+            - '.github/workflows/identity-api.yml'
+            - '.github/workflows/go-postgres.yml'
+            - '.github/workflows/container-image.yml'
+    push:
+        branches: [main]
+        paths: *identity-paths
+    workflow_dispatch:
+    workflow_call:
+        inputs:
+            checks-only:
+                type: boolean
+                default: false
+
+permissions:
+    contents: read
+
+concurrency:
+    group: identity-api-${{ inputs.checks-only && 'checks' || 'app' }}-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    check:
+        uses: ./.github/workflows/go-postgres.yml
+        with:
+            app: identity-api
+            database: identity_test
+            database-url-variable: KADRROOM_IDENTITY_TEST_DATABASE_URL
+    build-image:
+        if: ${{ !inputs.checks-only }}
+        uses: ./.github/workflows/container-image.yml
+        with:
+            app: identity-api

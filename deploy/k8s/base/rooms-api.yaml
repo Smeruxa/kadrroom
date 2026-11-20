@@ -1,0 +1,129 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: rooms-api
+    annotations:
+        kadrroom.io/revision: bootstrap
+spec:
+    replicas: 0
+    minReadySeconds: 3
+    progressDeadlineSeconds: 180
+    strategy:
+        type: Recreate
+    selector:
+        matchLabels:
+            app: rooms-api
+    template:
+        metadata:
+            labels:
+                app: rooms-api
+        spec:
+            serviceAccountName: kadrroom-runtime
+            automountServiceAccountToken: false
+            securityContext:
+                runAsNonRoot: true
+                seccompProfile:
+                    type: RuntimeDefault
+            containers:
+                - name: rooms-api
+                  image: ghcr.io/smeruxa/kadrroom/rooms-api@sha256:0000000000000000000000000000000000000000000000000000000000000000
+                  ports:
+                      - name: http
+                        containerPort: 8082
+                  env:
+                      - name: KADRROOM_PUBLIC_URL
+                        valueFrom:
+                            configMapKeyRef:
+                                name: public-origin
+                                key: url
+                      - name: KADRROOM_SECURE_COOKIES
+                        value: 'true'
+                      - name: KADRROOM_ROOMS_DATABASE_URL
+                        valueFrom:
+                            secretKeyRef:
+                                name: rooms-config
+                                key: KADRROOM_ROOMS_DATABASE_URL
+                      - name: KADRROOM_IDENTITY_URL
+                        value: http://identity-api:8081
+                      - name: KADRROOM_CATALOG_URL
+                        value: http://catalog-api:8080
+                      - name: KADRROOM_CATALOG_INTERNAL_TOKEN
+                        valueFrom:
+                            secretKeyRef:
+                                name: catalog-rooms-contract
+                                key: KADRROOM_CATALOG_INTERNAL_TOKEN
+                      - name: KADRROOM_LIVEKIT_URL
+                        valueFrom:
+                            secretKeyRef:
+                                name: livekit-config
+                                key: KADRROOM_LIVEKIT_URL
+                                optional: true
+                      - name: KADRROOM_LIVEKIT_INTERNAL_URL
+                        valueFrom:
+                            secretKeyRef:
+                                name: livekit-config
+                                key: KADRROOM_LIVEKIT_INTERNAL_URL
+                                optional: true
+                      - name: KADRROOM_LIVEKIT_API_KEY
+                        valueFrom:
+                            secretKeyRef:
+                                name: livekit-config
+                                key: KADRROOM_LIVEKIT_API_KEY
+                                optional: true
+                      - name: KADRROOM_LIVEKIT_API_SECRET
+                        valueFrom:
+                            secretKeyRef:
+                                name: livekit-config
+                                key: KADRROOM_LIVEKIT_API_SECRET
+                                optional: true
+                      - name: KADRROOM_DEMO_MEDIA_URLS
+                        value: '{"last-tram":"/demo-media/last-tram.mp4","blue-light":"/demo-media/blue-light.m4a"}'
+                  securityContext:
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities:
+                          drop: [ALL]
+                  resources:
+                      requests:
+                          cpu: 25m
+                          memory: 32Mi
+                      limits:
+                          memory: 128Mi
+                  volumeMounts:
+                      - name: postgres-ca
+                        mountPath: /etc/kadrroom/postgres-ca
+                        readOnly: true
+                  startupProbe:
+                      httpGet:
+                          path: /healthz
+                          port: http
+                      periodSeconds: 3
+                      failureThreshold: 20
+                  readinessProbe:
+                      httpGet:
+                          path: /readyz
+                          port: http
+                      periodSeconds: 3
+                      timeoutSeconds: 2
+                  livenessProbe:
+                      httpGet:
+                          path: /healthz
+                          port: http
+                      periodSeconds: 10
+            volumes:
+                - name: postgres-ca
+                  configMap:
+                      name: postgres-ca
+                      optional: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: rooms-api
+spec:
+    selector:
+        app: rooms-api
+    ports:
+        - name: http
+          port: 8082
+          targetPort: http

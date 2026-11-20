@@ -1,0 +1,85 @@
+name: Admin Frontend
+
+on:
+    pull_request:
+        paths: &admin-frontend-paths
+            - 'apps/admin-frontend/**'
+            - 'apps/frontend/package.json'
+            - 'apps/frontend/nginx-api.conf'
+            - 'apps/frontend/nginx-proxy-context.conf'
+            - 'packages/contracts/**'
+            - 'packages/ui/**'
+            - 'tests/support/**'
+            - 'tools/ci/install-frontend.sh'
+            - 'package*.json'
+            - 'tsconfig*.json'
+            - 'eslint.config.mjs'
+            - '.editorconfig'
+            - '.prettier*'
+            - '.dockerignore'
+            - '.github/workflows/admin-frontend.yml'
+            - '.github/workflows/container-image.yml'
+    push:
+        branches: [main]
+        paths: *admin-frontend-paths
+    workflow_dispatch:
+    workflow_call:
+        inputs:
+            checks-only:
+                type: boolean
+                default: false
+
+permissions:
+    contents: read
+
+concurrency:
+    group: admin-frontend-${{ inputs.checks-only && 'checks' || 'app' }}-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    lint:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  persist-credentials: false
+            - uses: actions/setup-node@v6
+              with:
+                  node-version: '24'
+                  cache: npm
+            - run: bash tools/ci/install-frontend.sh
+            - run: npx --no-install prettier --check apps/admin-frontend
+            - run: npx --no-install eslint --max-warnings 0 apps/admin-frontend
+    test:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  persist-credentials: false
+            - uses: actions/setup-node@v6
+              with:
+                  node-version: '24'
+                  cache: npm
+            - run: bash tools/ci/install-frontend.sh
+            - run: npm run test:unit:admin
+    build:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  persist-credentials: false
+            - uses: actions/setup-node@v6
+              with:
+                  node-version: '24'
+                  cache: npm
+            - run: bash tools/ci/install-frontend.sh
+            - run: npx --no-install tsc -p apps/admin-frontend/tsconfig.json
+            - run: npm run build --workspace apps/admin-frontend
+    build-image:
+        if: ${{ !inputs.checks-only }}
+        uses: ./.github/workflows/container-image.yml
+        with:
+            app: admin-frontend

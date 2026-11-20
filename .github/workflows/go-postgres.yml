@@ -1,0 +1,104 @@
+name: Go and PostgreSQL checks
+
+on:
+    workflow_call:
+        inputs:
+            app:
+                type: string
+                required: true
+            database:
+                type: string
+                required: true
+            database-url-variable:
+                type: string
+                required: true
+            shared-package:
+                type: string
+                default: ''
+            ffmpeg:
+                type: boolean
+                default: false
+
+permissions:
+    contents: read
+
+env:
+    APP: ${{ inputs.app }}
+    SHARED_PACKAGE: ${{ inputs.shared-package }}
+
+jobs:
+    lint:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  persist-credentials: false
+            - uses: actions/setup-go@v6
+              with:
+                  go-version-file: go.mod
+                  cache: false
+            - run: |
+                  directories=("apps/$APP")
+                  if [[ -n "$SHARED_PACKAGE" ]]; then
+                      directories+=("$SHARED_PACKAGE")
+                  fi
+                  bash tools/ci/check-go-format.sh "${directories[@]}"
+            - uses: golangci/golangci-lint-action@v9
+              with:
+                  version: v2.15.0
+                  args: >-
+                      ./apps/${{ inputs.app }}/...
+                      ${{ inputs.shared-package && format('./{0}/...', inputs.shared-package) || '' }}
+    test:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        services:
+            postgres:
+                image: postgres:16-alpine
+                env:
+                    POSTGRES_USER: kadrroom
+                    POSTGRES_PASSWORD: kadrroom_test
+                    POSTGRES_DB: ${{ inputs.database }}
+                ports:
+                    - '5432/tcp'
+                options: >-
+                    --health-cmd "pg_isready -h 127.0.0.1 -U kadrroom -d ${{ inputs.database }}"
+                    --health-interval 2s --health-timeout 2s --health-retries 25
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  persist-credentials: false
+            - uses: actions/setup-go@v6
+              with:
+                  go-version-file: go.mod
+                  cache: false
+            - name: Install FFmpeg
+              if: inputs.ffmpeg
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install --yes --no-install-recommends ffmpeg
+            - name: Run Go and database tests
+              env:
+                  DATABASE: ${{ inputs.database }}
+                  DATABASE_PORT: ${{ job.services.postgres.ports['5432'] }}
+                  DATABASE_URL_VARIABLE: ${{ inputs.database-url-variable }}
+              run: |
+                  packages=("./apps/$APP/...")
+                  if [[ -n "$SHARED_PACKAGE" ]]; then
+                      packages+=("./$SHARED_PACKAGE/...")
+                  fi
+                  env "$DATABASE_URL_VARIABLE=postgres://kadrroom:kadrroom_test@127.0.0.1:$DATABASE_PORT/$DATABASE?sslmode=disable" \
+                      go test -race -cover -count=1 "${packages[@]}"
+    build:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  persist-credentials: false
+            - uses: actions/setup-go@v6
+              with:
+                  go-version-file: go.mod
+                  cache: false
+            - run: go build -trimpath -o "$RUNNER_TEMP/$APP" "./apps/$APP"

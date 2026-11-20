@@ -1,0 +1,108 @@
+name: Browser checks
+
+on:
+    workflow_call:
+        inputs:
+            use-built-images:
+                type: boolean
+                default: false
+
+permissions:
+    contents: read
+
+jobs:
+    playwright:
+        name: Playwright
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        env:
+            KADRROOM_LOCAL_ENV_FILE: ${{ github.workspace }}/.env.playwright.local
+            KADRROOM_E2E_BASE_URL: http://127.0.0.1:4173
+            KADRROOM_E2E_MAIL_URL: http://127.0.0.1:8025
+            KADRROOM_E2E_ADMIN_URL: http://127.0.0.1:4183
+            PLAYWRIGHT_HTML_OPEN: never
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  persist-credentials: false
+            - uses: actions/setup-node@v6
+              with:
+                  node-version: '24'
+                  cache: npm
+            - uses: actions/setup-go@v6
+              with:
+                  go-version-file: go.mod
+                  cache: false
+            - run: bash tools/ci/install-frontend.sh
+            - name: Install Playwright browsers
+              id: browsers
+              run: npx --no-install playwright install --with-deps chromium firefox webkit
+            - name: Test the catalog with the dev server
+              run: npm run test:e2e -- catalog.spec.ts --reporter=line,html --output=test-results/dev
+              env:
+                  KADRROOM_E2E_BASE_URL: ''
+                  PLAYWRIGHT_HTML_OUTPUT_DIR: playwright-report/dev
+            - name: Test the admin frontend
+              if: ${{ !cancelled() && steps.browsers.outcome == 'success' }}
+              run: |
+                  npm run test:e2e --workspace apps/admin-frontend -- admin.spec.ts \
+                      --browser=all --reporter=line,html --output="$GITHUB_WORKSPACE/test-results/admin"
+              env:
+                  KADRROOM_E2E_ADMIN_URL: ''
+                  PLAYWRIGHT_HTML_OUTPUT_DIR: ${{ github.workspace }}/playwright-report/admin
+            - name: Download CI image archives
+              id: images
+              if: ${{ !cancelled() && steps.browsers.outcome == 'success' && inputs.use-built-images }}
+              uses: actions/download-artifact@v7
+              with:
+                  pattern: image-*
+                  path: ${{ runner.temp }}/kadrroom-images
+            - name: Start the Compose stack
+              id: stack
+              if: ${{ !cancelled() && steps.browsers.outcome == 'success' && (!inputs.use-built-images || steps.images.outcome == 'success') }}
+              env:
+                  USE_BUILT_IMAGES: ${{ inputs.use-built-images }}
+              run: |
+                  if [[ "$USE_BUILT_IMAGES" == 'true' ]]; then
+                      for archive in "$RUNNER_TEMP"/kadrroom-images/image-*/image.tar; do
+                          directory=${archive%/*}
+                          app=${directory##*/image-}
+                          docker image load --input "$archive"
+                          docker image tag "kadrroom/$app:ci" "kadrroom/$app:local"
+                      done
+                      bash tools/local/stack.sh testing up -d --no-build
+                  else
+                      bash tools/local/stack.sh testing up -d --build
+                  fi
+            - name: Wait for the Compose stack
+              id: ready
+              if: ${{ !cancelled() && steps.stack.outcome == 'success' }}
+              run: bash tools/ci/wait-testing-stack.sh "$KADRROOM_E2E_BASE_URL" "$KADRROOM_E2E_MAIL_URL" "$KADRROOM_E2E_ADMIN_URL"
+            - name: Run the real browser suite on Compose
+              if: ${{ !cancelled() && steps.ready.outcome == 'success' }}
+              run: |
+                  curl --fail --silent --show-error --output /dev/null --connect-timeout 1 --max-time 2 \
+                      --retry 20 --retry-delay 1 --retry-max-time 30 --retry-connrefused http://127.0.0.1:7880/
+                  KADRROOM_E2E_RTC=1 npm run test:e2e -- tests/e2e/ \
+                      --reporter=line,html --output=test-results/compose
+              env:
+                  PLAYWRIGHT_HTML_OUTPUT_DIR: playwright-report/compose
+            - name: Save Compose diagnostics
+              if: failure() && steps.stack.outcome != 'skipped'
+              run: |
+                  mkdir -p test-results/compose-diagnostics
+                  bash tools/local/stack.sh testing ps -a > test-results/compose-diagnostics/containers.txt 2>&1 || true
+                  bash tools/local/stack.sh testing logs --no-color --tail=100 > test-results/compose-diagnostics/containers.log 2>&1 || true
+            - name: Stop the Compose stack
+              if: always() && steps.stack.outcome != 'skipped'
+              run: bash tools/local/stack.sh testing down --volumes --remove-orphans
+            - if: failure()
+              uses: actions/upload-artifact@v6
+              with:
+                  name: frontend-playwright-results
+                  path: |
+                      playwright-report/
+                      test-results/
+                  if-no-files-found: ignore
+                  overwrite: true
+                  retention-days: 7

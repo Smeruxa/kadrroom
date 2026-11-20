@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: admin-frontend
+    annotations:
+        kadrroom.io/revision: bootstrap
+spec:
+    replicas: 0
+    minReadySeconds: 3
+    progressDeadlineSeconds: 180
+    strategy:
+        rollingUpdate:
+            maxSurge: 1
+            maxUnavailable: 0
+    selector:
+        matchLabels:
+            app: admin-frontend
+    template:
+        metadata:
+            labels:
+                app: admin-frontend
+        spec:
+            serviceAccountName: kadrroom-runtime
+            automountServiceAccountToken: false
+            securityContext:
+                runAsNonRoot: true
+                runAsUser: 101
+                runAsGroup: 101
+                fsGroup: 101
+                seccompProfile:
+                    type: RuntimeDefault
+            containers:
+                - name: admin-frontend
+                  image: ghcr.io/smeruxa/kadrroom/admin-frontend@sha256:0000000000000000000000000000000000000000000000000000000000000000
+                  ports:
+                      - name: http
+                        containerPort: 8080
+                  env:
+                      - name: POD_NAMESPACE
+                        valueFrom:
+                            fieldRef:
+                                fieldPath: metadata.namespace
+                      - name: ADMIN_API_UPSTREAM
+                        value: admin-api.$(POD_NAMESPACE).svc.cluster.local:8083
+                      - name: IDENTITY_API_UPSTREAM
+                        value: identity-api.$(POD_NAMESPACE).svc.cluster.local:8081
+                      - name: CATALOG_API_UPSTREAM
+                        value: catalog-api.$(POD_NAMESPACE).svc.cluster.local:8080
+                      - name: KADRROOM_AUTH_PROXY_TOKEN
+                        valueFrom:
+                            secretKeyRef:
+                                name: auth-proxy-config
+                                key: KADRROOM_AUTH_PROXY_TOKEN
+                      - name: KADRROOM_TRUSTED_PROXY_CIDR
+                        valueFrom:
+                            secretKeyRef:
+                                name: auth-proxy-config
+                                key: KADRROOM_TRUSTED_PROXY_CIDR
+                  securityContext:
+                      allowPrivilegeEscalation: false
+                      readOnlyRootFilesystem: true
+                      capabilities:
+                          drop: [ALL]
+                  resources:
+                      requests:
+                          cpu: 25m
+                          memory: 32Mi
+                      limits:
+                          memory: 128Mi
+                  volumeMounts:
+                      - name: tmp
+                        mountPath: /tmp
+                  readinessProbe:
+                      httpGet:
+                          path: /
+                          port: http
+                      periodSeconds: 3
+                  livenessProbe:
+                      httpGet:
+                          path: /healthz
+                          port: http
+                      periodSeconds: 10
+            volumes:
+                - name: tmp
+                  emptyDir:
+                      sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+    name: admin-frontend
+spec:
+    selector:
+        app: admin-frontend
+    ports:
+        - name: http
+          port: 8080
+          targetPort: http

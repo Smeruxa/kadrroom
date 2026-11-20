@@ -1,0 +1,16 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: identity-api
+spec:
+    template:
+        spec:
+            containers:
+                - name: identity-api
+                  env:
+                      - name: KADRROOM_SMTP_ADDR
+                        value: mailpit:1025
+                      - name: KADRROOM_SMTP_FROM
+                        value: kadrroom@example.test
+                      - name: KADRROOM_SMTP_TLS
+                        value: none

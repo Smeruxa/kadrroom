@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+    name: identity-api
+spec:
+    template:
+        spec:
+            containers:
+                - name: identity-api
+                  env:
+                      - name: KADRROOM_SMTP_ADDR
+                        valueFrom:
+                            secretKeyRef:
+                                name: identity-config
+                                key: KADRROOM_SMTP_ADDR
+                      - name: KADRROOM_SMTP_FROM
+                        valueFrom:
+                            secretKeyRef:
+                                name: identity-config
+                                key: KADRROOM_SMTP_FROM
+                      - name: KADRROOM_SMTP_USERNAME
+                        valueFrom:
+                            secretKeyRef:
+                                name: identity-config
+                                key: KADRROOM_SMTP_USERNAME
+                      - name: KADRROOM_SMTP_PASSWORD
+                        valueFrom:
+                            secretKeyRef:
+                                name: identity-config
+                                key: KADRROOM_SMTP_PASSWORD
+                      - name: KADRROOM_SMTP_TLS
+                        value: starttls

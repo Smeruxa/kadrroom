@@ -1,0 +1,114 @@
+name: Frontend
+
+on:
+    pull_request:
+        paths: &frontend-paths
+            - 'apps/frontend/**'
+            - 'apps/admin-frontend/**'
+            - 'apps/admin-api/**'
+            - 'apps/catalog-api/**'
+            - 'apps/identity-api/**'
+            - 'apps/media-worker/**'
+            - 'apps/rooms-api/**'
+            - 'internal/catalogmedia/**'
+            - 'packages/contracts/**'
+            - 'packages/ui/**'
+            - 'tests/**'
+            - 'deploy/local/**'
+            - 'tools/local/**'
+            - 'tools/ci/install-frontend.sh'
+            - 'tools/ci/test-deploy.sh'
+            - 'tools/ci/wait-testing-stack.sh'
+            - 'package*.json'
+            - 'tsconfig*.json'
+            - 'eslint.config.mjs'
+            - 'playwright.config.ts'
+            - 'go.mod'
+            - 'go.sum'
+            - '.editorconfig'
+            - '.prettier*'
+            - '.dockerignore'
+            - '.github/workflows/frontend.yml'
+            - '.github/workflows/playwright.yml'
+            - '.github/workflows/container-image.yml'
+            - '.github/workflows/deploy-testing.yml'
+    push:
+        branches: [main]
+        paths: *frontend-paths
+    workflow_dispatch:
+    workflow_call:
+        inputs:
+            checks-only:
+                type: boolean
+                default: false
+
+permissions:
+    contents: read
+
+concurrency:
+    group: frontend-${{ inputs.checks-only && 'checks' || 'app' }}-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    lint:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  persist-credentials: false
+            - uses: actions/setup-node@v6
+              with:
+                  node-version: '24'
+                  cache: npm
+            - run: bash tools/ci/install-frontend.sh
+            - run: npx --no-install prettier --check apps/frontend packages/contracts packages/ui tests playwright.config.ts
+            - run: npx --no-install eslint --max-warnings 0 apps/frontend packages/contracts packages/ui tests playwright.config.ts
+    test:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  persist-credentials: false
+            - uses: actions/setup-node@v6
+              with:
+                  node-version: '24'
+                  cache: npm
+            - run: bash tools/ci/install-frontend.sh
+            - run: npm run test:unit:frontend
+    playwright:
+        if: ${{ !inputs.checks-only }}
+        uses: ./.github/workflows/playwright.yml
+    build:
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@v6
+              with:
+                  persist-credentials: false
+            - uses: actions/setup-node@v6
+              with:
+                  node-version: '24'
+                  cache: npm
+            - run: bash tools/ci/install-frontend.sh
+            - run: |
+                  npx --no-install tsc -p apps/frontend/tsconfig.json
+                  npx --no-install tsc -p packages/contracts/tsconfig.json
+                  npx --no-install tsc -p packages/ui/tsconfig.json
+                  npx --no-install tsc -p tsconfig.json
+            - run: npm run build --workspace apps/frontend
+    build-image:
+        if: ${{ !inputs.checks-only }}
+        strategy:
+            fail-fast: false
+            matrix:
+                app: [catalog-api, frontend]
+        uses: ./.github/workflows/container-image.yml
+        with:
+            app: ${{ matrix.app }}
+    deploy-in-testing:
+        needs: [lint, test, playwright, build, build-image]
+        uses: ./.github/workflows/deploy-testing.yml
+        with:
+            app: frontend

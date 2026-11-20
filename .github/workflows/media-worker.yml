@@ -1,0 +1,46 @@
+name: Media Worker
+
+on:
+    pull_request:
+        paths: &worker-paths
+            - 'apps/media-worker/**'
+            - 'internal/catalogmedia/**'
+            - 'apps/frontend/public/demo-media/**'
+            - 'tools/ci/check-go-format.sh'
+            - 'go.mod'
+            - 'go.sum'
+            - '.golangci.yml'
+            - '.dockerignore'
+            - '.github/workflows/media-worker.yml'
+            - '.github/workflows/go-postgres.yml'
+            - '.github/workflows/container-image.yml'
+    push:
+        branches: [main]
+        paths: *worker-paths
+    workflow_dispatch:
+    workflow_call:
+        inputs:
+            checks-only:
+                type: boolean
+                default: false
+
+permissions:
+    contents: read
+
+concurrency:
+    group: media-worker-${{ inputs.checks-only && 'checks' || 'app' }}-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    check:
+        uses: ./.github/workflows/go-postgres.yml
+        with:
+            app: media-worker
+            database: worker_test
+            database-url-variable: KADRROOM_CATALOG_TEST_DATABASE_URL
+            ffmpeg: true
+    build-image:
+        if: ${{ !inputs.checks-only }}
+        uses: ./.github/workflows/container-image.yml
+        with:
+            app: media-worker

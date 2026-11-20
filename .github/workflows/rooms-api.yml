@@ -1,0 +1,43 @@
+name: Rooms API
+
+on:
+    pull_request:
+        paths: &rooms-paths
+            - 'apps/rooms-api/**'
+            - 'tools/ci/check-go-format.sh'
+            - 'go.mod'
+            - 'go.sum'
+            - '.golangci.yml'
+            - '.dockerignore'
+            - '.github/workflows/rooms-api.yml'
+            - '.github/workflows/go-postgres.yml'
+            - '.github/workflows/container-image.yml'
+    push:
+        branches: [main]
+        paths: *rooms-paths
+    workflow_dispatch:
+    workflow_call:
+        inputs:
+            checks-only:
+                type: boolean
+                default: false
+
+permissions:
+    contents: read
+
+concurrency:
+    group: rooms-api-${{ inputs.checks-only && 'checks' || 'app' }}-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    check:
+        uses: ./.github/workflows/go-postgres.yml
+        with:
+            app: rooms-api
+            database: rooms_test
+            database-url-variable: KADRROOM_TEST_DATABASE_URL
+    build-image:
+        if: ${{ !inputs.checks-only }}
+        uses: ./.github/workflows/container-image.yml
+        with:
+            app: rooms-api
