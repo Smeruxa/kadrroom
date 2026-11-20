@@ -232,7 +232,7 @@ func TestAccountLifecycleWithPostgres(t *testing.T) {
 	if err := s.pool.QueryRow(ctx, "SELECT expires_at FROM identity_challenges").Scan(&firstExpiry); err != nil {
 		t.Fatal(err)
 	}
-	if token, err := s.mailChallenge(ctx, [32]byte{0x99}, purposeVerify, testOperator); err == nil || token != "" {
+	if token, err := s.mailChallenge(ctx, [32]byte{0x99}, job); err == nil || token != "" {
 		t.Fatal("a different key replaced the outstanding challenge")
 	}
 	if _, err := s.nextMail(ctx); !errors.Is(err, pgx.ErrNoRows) {
@@ -376,7 +376,14 @@ func TestMailRetryKeepsPreMigrationChallengeValidWithPostgres(t *testing.T) {
 	`, email, tokenHash(oldToken)); err != nil {
 		t.Fatal(err)
 	}
-	next, err := s.mailChallenge(ctx, testMailTokenKey, purposeVerify, email)
+	if err := s.queueMail(ctx, purposeVerify, email); err != nil {
+		t.Fatal(err)
+	}
+	job, err := s.nextMail(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	next, err := s.mailChallenge(ctx, testMailTokenKey, job)
 	if err != nil || !validToken(next) || next == oldToken {
 		t.Fatalf("active legacy challenge could not be supplemented: %v", err)
 	}
@@ -388,6 +395,147 @@ func TestMailRetryKeepsPreMigrationChallengeValidWithPostgres(t *testing.T) {
 	}
 	if matches, err := s.challengeExists(ctx, purposeVerify, next); err != nil || matches {
 		t.Fatalf("redeeming old link left new token active: %v", err)
+	}
+}
+
+func TestMailRetryCannotReplaceConsumedOrExpiredResetWithPostgres(t *testing.T) {
+	for _, disposition := range []string{"consumed", "expired"} {
+		t.Run(disposition, func(t *testing.T) {
+			ctx := t.Context()
+			s := testStore(t)
+			const email = "retry-reset@example.test"
+			publicURL, err := url.Parse(testPublic)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.pool.Exec(ctx, `
+				INSERT INTO identity_accounts(email, display_name, password_hash, role)
+				VALUES ($1, 'Test', 'unused fixture password hash', 'user')
+			`, email); err != nil {
+				t.Fatal(err)
+			}
+			if err := s.queueMail(ctx, purposeReset, email); err != nil {
+				t.Fatal(err)
+			}
+			job, err := s.nextMail(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			mailer := &captureMailer{err: errors.New("SMTP reply lost"), acceptBeforeError: true}
+			if err := processMail(ctx, s, mailer, publicURL, testMailTokenKey, job); !errors.Is(err, mailer.err) {
+				t.Fatalf("ambiguous first delivery failed to exercise retry: %v", err)
+			}
+			if len(mailer.messages) != 1 {
+				t.Fatal("SMTP fixture did not accept the first message")
+			}
+			original := tokenFromMessage(t, mailer.messages[0], publicURL, purposeReset)
+			if disposition == "consumed" {
+				changed, err := s.reset(ctx, original, "updated fixture password hash")
+				if err != nil || !changed {
+					t.Fatalf("first reset link could not be used: %v", err)
+				}
+			} else if _, err := s.pool.Exec(ctx, "UPDATE identity_challenges SET expires_at = now()"); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.pool.Exec(ctx, "UPDATE identity_mail_requests SET next_at = now()"); err != nil {
+				t.Fatal(err)
+			}
+			retry, err := s.nextMail(ctx)
+			if err != nil || retry.id != job.id || retry.attempts != 2 {
+				t.Fatalf("original mail job did not resume: %v", err)
+			}
+			mailer.err = nil
+			if err := processMail(ctx, s, mailer, publicURL, testMailTokenKey, retry); err != nil {
+				t.Fatal(err)
+			}
+			if len(mailer.messages) != 1 {
+				t.Fatal("outdated mail job sent a replacement link")
+			}
+			var activeChallenges int
+			if err := s.pool.QueryRow(ctx, "SELECT count(*) FROM identity_challenges WHERE expires_at > now()").
+				Scan(&activeChallenges); err != nil || activeChallenges != 0 {
+				t.Fatalf("outdated mail job left a fresh challenge: %v", err)
+			}
+			if _, err := s.nextMail(ctx); !errors.Is(err, pgx.ErrNoRows) {
+				t.Fatalf("outdated mail job remained queued: %v", err)
+			}
+			if err := s.queueMail(ctx, purposeReset, email); err != nil {
+				t.Fatal(err)
+			}
+			fresh := nextToken(t, s, mailer, publicURL, purposeReset)
+			if fresh == original {
+				t.Fatal("fresh reset request returned the obsolete token")
+			}
+			if changed, err := s.reset(ctx, fresh, "second fixture password hash"); err != nil || !changed {
+				t.Fatalf("fresh reset request could not be redeemed: %v", err)
+			}
+		})
+	}
+}
+
+func TestFreshRequestSupersedesObsoleteMailClaimWithPostgres(t *testing.T) {
+	ctx := t.Context()
+	s := testStore(t)
+	const email = "supersede@example.test"
+	if err := s.queueMail(ctx, purposeVerify, email); err != nil {
+		t.Fatal(err)
+	}
+	oldJob, err := s.nextMail(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if token, err := s.mailChallenge(ctx, testMailTokenKey, oldJob); err != nil || !validToken(token) {
+		t.Fatalf("first challenge setup failed: %v", err)
+	}
+	if _, err := s.pool.Exec(ctx, "UPDATE identity_challenges SET expires_at = now()"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.queueMail(ctx, purposeVerify, email); err != nil {
+		t.Fatal(err)
+	}
+	fresh, err := s.nextMail(ctx)
+	if err != nil || fresh.id == oldJob.id || fresh.attempts != 1 {
+		t.Fatalf("fresh request reused an obsolete claim: %v", err)
+	}
+	if token, err := s.mailChallenge(ctx, testMailTokenKey, oldJob); err != nil || token != "" {
+		t.Fatalf("stale worker still owns the queue: %v", err)
+	}
+	if err := s.finishMail(ctx, oldJob); err != nil {
+		t.Fatal(err)
+	}
+	if token, err := s.mailChallenge(ctx, testMailTokenKey, fresh); err != nil || !validToken(token) {
+		t.Fatalf("stale acknowledgement removed the fresh job: %v", err)
+	}
+}
+
+func TestUnboundMailRetryDistinguishesFreshFromLegacyJobsWithPostgres(t *testing.T) {
+	for _, variant := range []string{"current", "legacy"} {
+		t.Run(variant, func(t *testing.T) {
+			ctx := t.Context()
+			s := testStore(t)
+			if err := s.queueMail(ctx, purposeVerify, "unbound@example.test"); err != nil {
+				t.Fatal(err)
+			}
+			if variant == "legacy" {
+				if _, err := s.pool.Exec(ctx, "UPDATE identity_mail_requests SET challenge_hash = NULL"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if _, err := s.nextMail(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := s.pool.Exec(ctx, "UPDATE identity_mail_requests SET next_at = now()"); err != nil {
+				t.Fatal(err)
+			}
+			retry, err := s.nextMail(ctx)
+			if err != nil || retry.attempts != 2 {
+				t.Fatalf("could not resume unbound job: %v", err)
+			}
+			token, err := s.mailChallenge(ctx, testMailTokenKey, retry)
+			if err != nil || (variant == "current" && !validToken(token)) || (variant == "legacy" && token != "") {
+				t.Fatalf("unexpected result for %s unbound job: %v", variant, err)
+			}
+		})
 	}
 }
 
@@ -422,7 +570,12 @@ func nextToken(t *testing.T, s store, catcher *captureMailer, publicURL *url.URL
 	if len(catcher.messages) != before+1 {
 		t.Fatal("expected one challenge mail")
 	}
-	for _, line := range strings.Split(catcher.messages[before], "\r\n") {
+	return tokenFromMessage(t, catcher.messages[before], publicURL, purpose)
+}
+
+func tokenFromMessage(t *testing.T, message string, publicURL *url.URL, purpose string) string {
+	t.Helper()
+	for _, line := range strings.Split(message, "\r\n") {
 		link, err := url.Parse(line)
 		if err == nil && link.Host == publicURL.Host && link.Path == "/"+purpose {
 			token := link.Query().Get("token")

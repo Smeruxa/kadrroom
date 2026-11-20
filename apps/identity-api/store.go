@@ -46,59 +46,111 @@ func (s store) migrate(ctx context.Context) error {
 
 func (s store) queueMail(ctx context.Context, purpose, email string) error {
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO identity_mail_requests AS jobs (purpose, email)
-		VALUES ($1, $2)
+		INSERT INTO identity_mail_requests AS jobs (purpose, email, challenge_hash)
+		VALUES ($1, $2, ''::bytea)
 		ON CONFLICT (purpose, email) DO UPDATE
-		SET attempts = 0, created_at = excluded.created_at, next_at = excluded.next_at
-		WHERE jobs.attempts >= 5 AND jobs.next_at <= now()
+		SET id = excluded.id, attempts = 0, challenge_hash = excluded.challenge_hash,
+		    created_at = excluded.created_at, next_at = excluded.next_at
+		WHERE (jobs.attempts >= 5 AND jobs.next_at <= now())
+		   OR (octet_length(jobs.challenge_hash) > 0 AND NOT EXISTS (
+		       SELECT 1 FROM identity_challenges
+		       WHERE purpose = jobs.purpose AND email = jobs.email
+		         AND token_hash = jobs.challenge_hash AND expires_at > now()
+		   ))
 	`, purpose, email)
 	return err
 }
 
-func (s store) mailChallenge(ctx context.Context, key [32]byte, purpose, email string) (string, error) {
-	var candidateNonce [tokenBytes]byte
-	if _, err := rand.Read(candidateNonce[:]); err != nil {
+type challengeSecret struct {
+	nonce []byte
+	hash  []byte
+}
+
+func (s store) mailChallenge(ctx context.Context, key [32]byte, job mailJob) (string, error) {
+	var token string
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		var bound []byte
+		err := tx.QueryRow(ctx, `
+			SELECT challenge_hash FROM identity_mail_requests
+			WHERE id = $1 AND attempts = $2 FOR UPDATE
+		`, job.id, job.attempts).Scan(&bound)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if bound == nil && job.attempts > 1 {
+			return nil
+		}
+		unbound := len(bound) == 0
+		if unbound {
+			bound = nil
+		}
+		secret, err := loadMailChallenge(ctx, tx, job, bound)
+		if errors.Is(err, pgx.ErrNoRows) && unbound {
+			secret, err = issueMailChallenge(ctx, tx, key, job)
+		}
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		token = deriveMailToken(key, job.purpose, job.email, secret.nonce)
+		if len(secret.nonce) != tokenBytes || !hmac.Equal(tokenHash(token), secret.hash) {
+			return errors.New("mail token key does not match unexpired challenge")
+		}
+		if unbound {
+			_, err = tx.Exec(ctx, "UPDATE identity_mail_requests SET challenge_hash = $2 WHERE id = $1", job.id, secret.hash)
+		}
+		return err
+	})
+	if err != nil {
 		return "", err
 	}
-	candidate := deriveMailToken(key, purpose, email, candidateNonce[:])
+	return token, nil
+}
+
+func loadMailChallenge(ctx context.Context, tx pgx.Tx, job mailJob, bound []byte) (challengeSecret, error) {
+	var secret challengeSecret
+	err := tx.QueryRow(ctx, `
+		SELECT token_nonce, token_hash FROM identity_challenges
+		WHERE purpose = $1 AND email = $2 AND expires_at > clock_timestamp()
+		  AND token_nonce IS NOT NULL AND ($3::bytea IS NULL OR token_hash = $3)
+		  AND EXISTS (SELECT 1 FROM identity_accounts WHERE email = $2) = ($1 = 'reset')
+		FOR UPDATE
+	`, job.purpose, job.email, bound).Scan(&secret.nonce, &secret.hash)
+	return secret, err
+}
+
+func issueMailChallenge(ctx context.Context, tx pgx.Tx, key [32]byte, job mailJob) (challengeSecret, error) {
+	var candidateNonce [tokenBytes]byte
+	if _, err := rand.Read(candidateNonce[:]); err != nil {
+		return challengeSecret{}, err
+	}
+	candidate := deriveMailToken(key, job.purpose, job.email, candidateNonce[:])
 	ttl := 30 * time.Minute
-	if purpose == purposeVerify {
+	if job.purpose == purposeVerify {
 		ttl = 24 * time.Hour
 	}
-	var nonce, hash []byte
-	err := s.pool.QueryRow(ctx, `
+	var secret challengeSecret
+	err := tx.QueryRow(ctx, `
 		INSERT INTO identity_challenges AS current (purpose, email, token_hash, expires_at, token_nonce)
-		SELECT $1, $2, $3, now() + $4::int * interval '1 second', $5
+		SELECT $1, $2, $3, clock_timestamp() + $4::int * interval '1 second', $5
 		WHERE EXISTS (SELECT 1 FROM identity_accounts WHERE email = $2) = ($1 = 'reset')
 		ON CONFLICT (purpose, email) DO UPDATE
 		SET token_hash = excluded.token_hash,
 		    expires_at = excluded.expires_at,
 		    token_nonce = excluded.token_nonce,
-		    legacy_token_hash = CASE WHEN current.token_nonce IS NULL AND current.expires_at > now()
+		    legacy_token_hash = CASE WHEN current.token_nonce IS NULL AND current.expires_at > clock_timestamp()
 		        THEN current.token_hash ELSE NULL END,
-		    legacy_expires_at = CASE WHEN current.token_nonce IS NULL AND current.expires_at > now()
+		    legacy_expires_at = CASE WHEN current.token_nonce IS NULL AND current.expires_at > clock_timestamp()
 		        THEN current.expires_at ELSE NULL END
-		WHERE current.token_nonce IS NULL OR current.expires_at <= now()
+		WHERE current.token_nonce IS NULL OR current.expires_at <= clock_timestamp()
 		RETURNING token_nonce, token_hash
-	`, purpose, email, tokenHash(candidate), int(ttl.Seconds()), candidateNonce[:]).Scan(&nonce, &hash)
-	if errors.Is(err, pgx.ErrNoRows) {
-		err = s.pool.QueryRow(ctx, `
-			SELECT token_nonce, token_hash FROM identity_challenges
-			WHERE purpose = $1 AND email = $2 AND expires_at > now()
-			  AND EXISTS (SELECT 1 FROM identity_accounts WHERE email = $2) = ($1 = 'reset')
-		`, purpose, email).Scan(&nonce, &hash)
-	}
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", nil
-	}
-	if err != nil {
-		return "", err
-	}
-	token := deriveMailToken(key, purpose, email, nonce)
-	if len(nonce) != tokenBytes || !hmac.Equal(tokenHash(token), hash) {
-		return "", errors.New("mail token key does not match unexpired challenge")
-	}
-	return token, nil
+	`, job.purpose, job.email, tokenHash(candidate), int(ttl.Seconds()), candidateNonce[:]).Scan(&secret.nonce, &secret.hash)
+	return secret, err
 }
 
 func deriveMailToken(key [32]byte, purpose, email string, nonce []byte) string {

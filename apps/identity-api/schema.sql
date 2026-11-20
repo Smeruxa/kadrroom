@@ -40,6 +40,8 @@ CREATE TABLE IF NOT EXISTS identity_mail_requests (
     UNIQUE (purpose, email)
 );
 
+ALTER TABLE identity_mail_requests ADD COLUMN IF NOT EXISTS challenge_hash bytea;
+
 CREATE INDEX IF NOT EXISTS identity_mail_requests_pending_idx ON identity_mail_requests (next_at, id);
 
 CREATE TABLE IF NOT EXISTS identity_rate_limits (

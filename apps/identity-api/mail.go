@@ -173,7 +173,7 @@ func runMailer(ctx context.Context, s store, sender mailSender, publicURL *url.U
 }
 
 func processMail(ctx context.Context, s store, sender mailSender, publicURL *url.URL, mailTokenKey [32]byte, job mailJob) error {
-	token, err := s.mailChallenge(ctx, mailTokenKey, job.purpose, job.email)
+	token, err := s.mailChallenge(ctx, mailTokenKey, job)
 	if err != nil {
 		return err
 	}
