@@ -14,6 +14,14 @@ CREATE TABLE IF NOT EXISTS identity_challenges (
     PRIMARY KEY (purpose, email)
 );
 
+ALTER TABLE identity_challenges
+    ADD COLUMN IF NOT EXISTS token_nonce bytea,
+    ADD COLUMN IF NOT EXISTS legacy_token_hash bytea,
+    ADD COLUMN IF NOT EXISTS legacy_expires_at timestamptz;
+
+CREATE UNIQUE INDEX IF NOT EXISTS identity_challenges_legacy_hash_idx
+    ON identity_challenges (legacy_token_hash) WHERE legacy_token_hash IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS identity_sessions (
     token_hash bytea PRIMARY KEY,
     account_id uuid NOT NULL REFERENCES identity_accounts(id) ON DELETE CASCADE,

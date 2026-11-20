@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -17,6 +18,8 @@ type config struct {
 	adminURL      *url.URL
 	secureCookies bool
 	operatorEmail string
+	proxyToken    string
+	mailTokenKey  [32]byte
 	mail          smtpMailer
 }
 
@@ -29,6 +32,17 @@ func loadConfig() (config, error) {
 	}
 	if cfg.databaseURL == "" {
 		return config{}, errors.New("KADRROOM_IDENTITY_DATABASE_URL is required")
+	}
+	cfg.proxyToken = os.Getenv("KADRROOM_AUTH_PROXY_TOKEN")
+	if cfg.proxyToken != "" && (len(cfg.proxyToken) < 32 || strings.ContainsAny(cfg.proxyToken, " \t\r\n")) {
+		return config{}, errors.New("KADRROOM_AUTH_PROXY_TOKEN must contain at least 32 bytes without whitespace")
+	}
+	mailKey := os.Getenv("KADRROOM_MAIL_TOKEN_KEY")
+	if len(mailKey) != hex.EncodedLen(len(cfg.mailTokenKey)) {
+		return config{}, errors.New("KADRROOM_MAIL_TOKEN_KEY must be a 32-byte key in hexadecimal")
+	}
+	if _, err := hex.Decode(cfg.mailTokenKey[:], []byte(mailKey)); err != nil {
+		return config{}, errors.New("KADRROOM_MAIL_TOKEN_KEY must be a 32-byte key in hexadecimal")
 	}
 	if value := os.Getenv("KADRROOM_SECURE_COOKIES"); value != "" {
 		secure, err := strconv.ParseBool(value)

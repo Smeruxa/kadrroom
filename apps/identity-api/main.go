@@ -63,7 +63,7 @@ func run(ctx context.Context) error {
 	workerDone := make(chan struct{})
 	go func() {
 		defer close(workerDone)
-		runMailer(workerContext, s, cfg.mail, cfg.publicURL)
+		runMailer(workerContext, s, cfg.mail, cfg.publicURL, cfg.mailTokenKey)
 	}()
 	defer func() {
 		stopWorker()

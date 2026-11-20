@@ -27,6 +27,8 @@ const (
 	newPassword  = "new unique test password"
 )
 
+var testMailTokenKey = [32]byte{0x01, 0x02, 0x03}
+
 func TestPasswordAndToken(t *testing.T) {
 	if validPassword("short") || validPassword(strings.Repeat("я", 129)) || !validPassword(strings.Repeat("я", 15)) {
 		t.Fatal("password length must count characters")
@@ -120,6 +122,77 @@ func TestOriginAndSessionWithoutCredentials(t *testing.T) {
 	}
 }
 
+func TestClientAddressAcceptsOnlyAuthenticatedSingleHop(t *testing.T) {
+	const token = "test-proxy-key-at-least-32-bytes-long"
+	handler := &identityHandler{proxyToken: token}
+	for _, test := range []struct {
+		name      string
+		tokens    []string
+		addresses []string
+		want      string
+	}{
+		{name: "direct", want: "192.0.2.1"},
+		{name: "forged", tokens: []string{"forged"}, addresses: []string{"203.0.113.34"}, want: "192.0.2.1"},
+		{name: "missing token", addresses: []string{"203.0.113.34"}, want: "192.0.2.1"},
+		{name: "authenticated", tokens: []string{token}, addresses: []string{"203.0.113.34"}, want: "203.0.113.34"},
+		{name: "canonical address", tokens: []string{token}, addresses: []string{"::ffff:203.0.113.34"}, want: "203.0.113.34"},
+		{name: "IPv6", tokens: []string{token}, addresses: []string{"2001:db8::34"}, want: "2001:db8::34"},
+		{name: "client list", tokens: []string{token}, addresses: []string{"203.0.113.34, 192.0.2.37"}, want: "192.0.2.1"},
+		{name: "duplicate address", tokens: []string{token}, addresses: []string{"203.0.113.34", "192.0.2.37"}, want: "192.0.2.1"},
+		{name: "duplicate token", tokens: []string{token, token}, addresses: []string{"203.0.113.34"}, want: "192.0.2.1"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, "/v1/auth/login", nil)
+			request.Header.Set("X-Forwarded-For", "198.51.100.1")
+			for _, value := range test.tokens {
+				request.Header.Add(authProxyTokenHeader, value)
+			}
+			for _, value := range test.addresses {
+				request.Header.Add(authClientIPHeader, value)
+			}
+			if got := handler.clientAddress(request); got != test.want {
+				t.Fatalf("client address = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
+func TestProxyPeerLimitSeparatesClientsWithPostgres(t *testing.T) {
+	s := testStore(t)
+	h := &identityHandler{store: s, proxyToken: "test-proxy-key-at-least-32-bytes-long"}
+	for _, address := range []string{"192.0.2.1", "203.0.113.20"} {
+		if _, err := s.pool.Exec(t.Context(), `
+			INSERT INTO identity_rate_limits (key, hits, expires_at)
+			VALUES ($1, 150, now()+interval '1 minute')
+		`, rateKey("auth-peer", address)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, test := range []struct {
+		name    string
+		address string
+		token   string
+		allowed bool
+	}{
+		{name: "limited client", address: "203.0.113.20", token: h.proxyToken},
+		{name: "second client behind same proxy", address: "203.0.113.21", token: h.proxyToken, allowed: true},
+		{name: "forged fresh address stays in peer limit", address: "203.0.113.22", token: "wrong"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			response := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodPost, "/v1/auth/login", nil)
+			request.Header.Set(authProxyTokenHeader, test.token)
+			request.Header.Set(authClientIPHeader, test.address)
+			if allowed := h.allowPeer(response, request); allowed != test.allowed {
+				t.Fatalf("peer allowed = %v, want %v", allowed, test.allowed)
+			}
+			if !test.allowed {
+				expectStatus(t, response, 429, "rate_limited")
+			}
+		})
+	}
+}
+
 func TestAccountLifecycleWithPostgres(t *testing.T) {
 	s := testStore(t)
 	ctx := t.Context()
@@ -146,9 +219,21 @@ func TestAccountLifecycleWithPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	catcher.err = errors.New("SMTP unavailable")
-	if err := processMail(ctx, s, catcher, publicURL, job); !errors.Is(err, catcher.err) {
+	catcher.err = errors.New("SMTP result unavailable after accepting data")
+	catcher.acceptBeforeError = true
+	if err := processMail(ctx, s, catcher, publicURL, testMailTokenKey, job); !errors.Is(err, catcher.err) {
 		t.Fatalf("failed SMTP attempt did not surface an error: %v", err)
+	}
+	if len(catcher.messages) != 1 {
+		t.Fatal("fixture did not capture the already-delivered email")
+	}
+	firstMessage := catcher.messages[0]
+	var firstExpiry time.Time
+	if err := s.pool.QueryRow(ctx, "SELECT expires_at FROM identity_challenges").Scan(&firstExpiry); err != nil {
+		t.Fatal(err)
+	}
+	if token, err := s.mailChallenge(ctx, [32]byte{0x99}, purposeVerify, testOperator); err == nil || token != "" {
+		t.Fatal("a different key replaced the outstanding challenge")
 	}
 	if _, err := s.nextMail(ctx); !errors.Is(err, pgx.ErrNoRows) {
 		t.Fatalf("mail retried without waiting: %v", err)
@@ -158,6 +243,19 @@ func TestAccountLifecycleWithPostgres(t *testing.T) {
 	}
 	catcher.err = nil
 	verifyToken := nextToken(t, s, catcher, publicURL, purposeVerify)
+	if catcher.messages[1] != firstMessage {
+		t.Fatal("retry invalidated the original email link")
+	}
+	var expiry time.Time
+	var nonce, digest []byte
+	if err := s.pool.QueryRow(ctx, "SELECT expires_at, token_nonce, token_hash FROM identity_challenges").
+		Scan(&expiry, &nonce, &digest); err != nil {
+		t.Fatal(err)
+	}
+	if !expiry.Equal(firstExpiry) || len(nonce) != tokenBytes ||
+		!bytes.Equal(digest, tokenHash(verifyToken)) || bytes.Equal(nonce, []byte(verifyToken)) {
+		t.Fatal("retry changed challenge expiry or did not store nonce and digest separately")
+	}
 	verifyBody := requestBody(t, tokenRequest{Token: verifyToken, Password: testPassword, DisplayName: "Ведущий"})
 	results := make(chan int, 2)
 	for range 2 {
@@ -264,17 +362,46 @@ func TestExhaustedMailRequestCanBeQueuedAgainWithPostgres(t *testing.T) {
 	}
 }
 
+func TestMailRetryKeepsPreMigrationChallengeValidWithPostgres(t *testing.T) {
+	s := testStore(t)
+	ctx := t.Context()
+	const email = "legacy@example.test"
+	oldToken, err := newToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.pool.Exec(ctx, `
+		INSERT INTO identity_challenges (purpose, email, token_hash, expires_at)
+		VALUES ('verify', $1, $2, now()+interval '1 hour')
+	`, email, tokenHash(oldToken)); err != nil {
+		t.Fatal(err)
+	}
+	next, err := s.mailChallenge(ctx, testMailTokenKey, purposeVerify, email)
+	if err != nil || !validToken(next) || next == oldToken {
+		t.Fatalf("active legacy challenge could not be supplemented: %v", err)
+	}
+	if matches, err := s.challengeExists(ctx, purposeVerify, oldToken); err != nil || !matches {
+		t.Fatalf("pre-upgrade email was invalidated: %v", err)
+	}
+	if verified, err := s.verify(ctx, oldToken, "Old link", "unused hash fixture", ""); err != nil || !verified {
+		t.Fatalf("pre-upgrade token could not be redeemed: %v", err)
+	}
+	if matches, err := s.challengeExists(ctx, purposeVerify, next); err != nil || matches {
+		t.Fatalf("redeeming old link left new token active: %v", err)
+	}
+}
+
 type captureMailer struct {
-	messages []string
-	err      error
+	messages          []string
+	err               error
+	acceptBeforeError bool
 }
 
 func (m *captureMailer) send(_ context.Context, _, _, body string) error {
-	if m.err != nil {
-		return m.err
+	if m.err == nil || m.acceptBeforeError {
+		m.messages = append(m.messages, body)
 	}
-	m.messages = append(m.messages, body)
-	return nil
+	return m.err
 }
 
 func processNextMail(t *testing.T, s store, catcher *captureMailer, publicURL *url.URL) {
@@ -283,7 +410,7 @@ func processNextMail(t *testing.T, s store, catcher *captureMailer, publicURL *u
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := processMail(t.Context(), s, catcher, publicURL, job); err != nil {
+	if err := processMail(t.Context(), s, catcher, publicURL, testMailTokenKey, job); err != nil {
 		t.Fatal(err)
 	}
 }

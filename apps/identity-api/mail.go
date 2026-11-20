@@ -128,7 +128,8 @@ func (s store) finishMail(ctx context.Context, job mailJob) error {
 
 func (s store) prune(ctx context.Context) error {
 	_, err := s.pool.Exec(ctx, `
-		DELETE FROM identity_challenges WHERE expires_at <= now();
+		DELETE FROM identity_challenges
+		WHERE expires_at <= now() AND (legacy_expires_at IS NULL OR legacy_expires_at <= now());
 		DELETE FROM identity_sessions WHERE expires_at <= now();
 		DELETE FROM identity_rate_limits WHERE expires_at <= now();
 		DELETE FROM identity_mail_requests WHERE next_at <= now() AND (attempts >= 5 OR created_at <= now() - interval '1 day');
@@ -136,7 +137,7 @@ func (s store) prune(ctx context.Context) error {
 	return err
 }
 
-func runMailer(ctx context.Context, s store, sender mailSender, publicURL *url.URL) {
+func runMailer(ctx context.Context, s store, sender mailSender, publicURL *url.URL, mailTokenKey [32]byte) {
 	var pruneAt time.Time
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
@@ -153,7 +154,7 @@ func runMailer(ctx context.Context, s store, sender mailSender, publicURL *url.U
 			jobContext, cancel := context.WithTimeout(ctx, 20*time.Second)
 			job, err := s.nextMail(jobContext)
 			if err == nil {
-				err = processMail(jobContext, s, sender, publicURL, job)
+				err = processMail(jobContext, s, sender, publicURL, mailTokenKey, job)
 			}
 			cancel()
 			if err != nil {
@@ -171,16 +172,12 @@ func runMailer(ctx context.Context, s store, sender mailSender, publicURL *url.U
 	}
 }
 
-func processMail(ctx context.Context, s store, sender mailSender, publicURL *url.URL, job mailJob) error {
-	token, err := newToken()
+func processMail(ctx context.Context, s store, sender mailSender, publicURL *url.URL, mailTokenKey [32]byte, job mailJob) error {
+	token, err := s.mailChallenge(ctx, mailTokenKey, job.purpose, job.email)
 	if err != nil {
 		return err
 	}
-	issued, err := s.issueChallenge(ctx, job.purpose, job.email, token)
-	if err != nil {
-		return err
-	}
-	if issued {
+	if token != "" {
 		subject, body := challengeMessage(publicURL, job.purpose, token)
 		if err := sender.send(ctx, job.email, subject, body); err != nil {
 			if job.attempts == 5 {
@@ -199,10 +196,10 @@ func challengeMessage(publicURL *url.URL, purpose, token string) (string, string
 	query := url.Values{"token": {token}}
 	link.RawQuery = query.Encode()
 	subject := "Подтвердите почту для KadrRoom"
-	instructions := "Перейдите по ссылке и задайте пароль. Ссылка действует 24 часа."
+	instructions := "Перейдите по ссылке и задайте пароль. Срок действия ссылки с первого письма — 24 часа."
 	if purpose == purposeReset {
 		subject = "Восстановление пароля KadrRoom"
-		instructions = "Перейдите по ссылке и задайте новый пароль. Ссылка действует 30 минут."
+		instructions = "Перейдите по ссылке и задайте новый пароль. Срок действия ссылки с первого письма — 30 минут."
 	}
 	return subject, instructions + "\r\n\r\n" + link.String() +
 		"\r\n\r\nЕсли вы ничего не запрашивали, проигнорируйте это письмо.\r\n"

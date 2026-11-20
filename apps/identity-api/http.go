@@ -2,13 +2,14 @@ package main
 
 import (
 	"context"
+	"crypto/hmac"
 	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
 	"mime"
-	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
@@ -20,12 +21,18 @@ import (
 
 const sessionCookie = "kr_account"
 
+const (
+	authProxyTokenHeader = "X-Kadrroom-Proxy-Token"
+	authClientIPHeader   = "X-Kadrroom-Client-IP"
+)
+
 type identityHandler struct {
 	store         store
 	publicOrigin  string
 	adminOrigin   string
 	secureCookies bool
 	operatorEmail string
+	proxyToken    string
 	unknownHash   string
 	passwordSlots chan struct{}
 	draining      atomic.Bool
@@ -73,6 +80,7 @@ func newIdentityHandler(s store, cfg config) (*identityHandler, error) {
 		adminOrigin:   adminOrigin,
 		secureCookies: cfg.secureCookies,
 		operatorEmail: cfg.operatorEmail,
+		proxyToken:    cfg.proxyToken,
 		unknownHash:   unknownHash,
 		passwordSlots: make(chan struct{}, 4),
 	}, nil
@@ -329,11 +337,22 @@ func requestToken(r *http.Request) string {
 }
 
 func (h *identityHandler) allowPeer(w http.ResponseWriter, r *http.Request) bool {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		host = r.RemoteAddr
+	return h.allow(w, r, rateKey("auth-peer", h.clientAddress(r)), 150, time.Minute)
+}
+
+func (h *identityHandler) clientAddress(r *http.Request) string {
+	proxyTokens := r.Header.Values(authProxyTokenHeader)
+	addresses := r.Header.Values(authClientIPHeader)
+	if h.proxyToken != "" && len(proxyTokens) == 1 && len(addresses) == 1 &&
+		hmac.Equal([]byte(proxyTokens[0]), []byte(h.proxyToken)) {
+		if address, err := netip.ParseAddr(addresses[0]); err == nil && address.Zone() == "" {
+			return address.Unmap().String()
+		}
 	}
-	return h.allow(w, r, rateKey("auth-peer", host), 150, time.Minute)
+	if peer, err := netip.ParseAddrPort(r.RemoteAddr); err == nil {
+		return peer.Addr().Unmap().String()
+	}
+	return "unknown"
 }
 
 func (h *identityHandler) allow(w http.ResponseWriter, r *http.Request, key string, maxAttempts int, window time.Duration) bool {

@@ -2,7 +2,11 @@ package main
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
 	_ "embed"
+	"encoding/base64"
 	"errors"
 	"time"
 
@@ -51,19 +55,57 @@ func (s store) queueMail(ctx context.Context, purpose, email string) error {
 	return err
 }
 
-func (s store) issueChallenge(ctx context.Context, purpose, email, token string) (bool, error) {
+func (s store) mailChallenge(ctx context.Context, key [32]byte, purpose, email string) (string, error) {
+	var candidateNonce [tokenBytes]byte
+	if _, err := rand.Read(candidateNonce[:]); err != nil {
+		return "", err
+	}
+	candidate := deriveMailToken(key, purpose, email, candidateNonce[:])
 	ttl := 30 * time.Minute
 	if purpose == purposeVerify {
 		ttl = 24 * time.Hour
 	}
-	tag, err := s.pool.Exec(ctx, `
-		INSERT INTO identity_challenges (purpose, email, token_hash, expires_at)
-		SELECT $1, $2, $3, now() + $4::int * interval '1 second'
+	var nonce, hash []byte
+	err := s.pool.QueryRow(ctx, `
+		INSERT INTO identity_challenges AS current (purpose, email, token_hash, expires_at, token_nonce)
+		SELECT $1, $2, $3, now() + $4::int * interval '1 second', $5
 		WHERE EXISTS (SELECT 1 FROM identity_accounts WHERE email = $2) = ($1 = 'reset')
 		ON CONFLICT (purpose, email) DO UPDATE
-		SET token_hash = excluded.token_hash, expires_at = excluded.expires_at
-	`, purpose, email, tokenHash(token), int(ttl.Seconds()))
-	return tag.RowsAffected() > 0, err
+		SET token_hash = excluded.token_hash,
+		    expires_at = excluded.expires_at,
+		    token_nonce = excluded.token_nonce,
+		    legacy_token_hash = CASE WHEN current.token_nonce IS NULL AND current.expires_at > now()
+		        THEN current.token_hash ELSE NULL END,
+		    legacy_expires_at = CASE WHEN current.token_nonce IS NULL AND current.expires_at > now()
+		        THEN current.expires_at ELSE NULL END
+		WHERE current.token_nonce IS NULL OR current.expires_at <= now()
+		RETURNING token_nonce, token_hash
+	`, purpose, email, tokenHash(candidate), int(ttl.Seconds()), candidateNonce[:]).Scan(&nonce, &hash)
+	if errors.Is(err, pgx.ErrNoRows) {
+		err = s.pool.QueryRow(ctx, `
+			SELECT token_nonce, token_hash FROM identity_challenges
+			WHERE purpose = $1 AND email = $2 AND expires_at > now()
+			  AND EXISTS (SELECT 1 FROM identity_accounts WHERE email = $2) = ($1 = 'reset')
+		`, purpose, email).Scan(&nonce, &hash)
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	token := deriveMailToken(key, purpose, email, nonce)
+	if len(nonce) != tokenBytes || !hmac.Equal(tokenHash(token), hash) {
+		return "", errors.New("mail token key does not match unexpired challenge")
+	}
+	return token, nil
+}
+
+func deriveMailToken(key [32]byte, purpose, email string, nonce []byte) string {
+	digest := hmac.New(sha256.New, key[:])
+	_, _ = digest.Write([]byte("kadrroom-mail-challenge-v1\x00" + purpose + "\x00" + email + "\x00"))
+	_, _ = digest.Write(nonce)
+	return base64.RawURLEncoding.EncodeToString(digest.Sum(nil))
 }
 
 func (s store) challengeExists(ctx context.Context, purpose, token string) (bool, error) {
@@ -71,7 +113,8 @@ func (s store) challengeExists(ctx context.Context, purpose, token string) (bool
 	err := s.pool.QueryRow(ctx, `
 		SELECT EXISTS (
 			SELECT 1 FROM identity_challenges
-			WHERE purpose = $1 AND token_hash = $2 AND expires_at > now()
+			WHERE purpose = $1 AND ((token_hash = $2 AND expires_at > now())
+			  OR (legacy_token_hash = $2 AND legacy_expires_at > now()))
 		)
 	`, purpose, tokenHash(token)).Scan(&exists)
 	return exists, err
@@ -124,7 +167,8 @@ func (s store) reset(ctx context.Context, token, passwordHash string) (bool, err
 func consumeChallenge(ctx context.Context, tx pgx.Tx, purpose, token string) pgx.Row {
 	return tx.QueryRow(ctx, `
 		DELETE FROM identity_challenges
-		WHERE purpose = $1 AND token_hash = $2 AND expires_at > now()
+		WHERE purpose = $1 AND ((token_hash = $2 AND expires_at > now())
+		  OR (legacy_token_hash = $2 AND legacy_expires_at > now()))
 		RETURNING email
 	`, purpose, tokenHash(token))
 }
