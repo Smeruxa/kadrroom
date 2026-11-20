@@ -3,16 +3,26 @@
         {
             "id": "last-tram",
             "title": "Последний трамвай",
-            "description": "Вечерний маршрут через почти пустой город.",
-            "durationSeconds": 240,
-            "available": false
+            "description": "Ночной трамвай проходит по мокрым улицам. Короткий ролик для первого совместного просмотра.",
+            "durationSeconds": 22,
+            "available": true,
+            "mediaType": "video"
         },
         {
             "id": "lighthouse-window",
             "title": "Окно маяка",
             "description": "На рассвете смотритель замечает лодку у берега.",
             "durationSeconds": 360,
-            "available": false
+            "available": false,
+            "mediaType": "video"
+        },
+        {
+            "id": "blue-light",
+            "title": "Синий свет",
+            "description": "Неспешная инструментальная миниатюра.",
+            "durationSeconds": 32,
+            "available": true,
+            "mediaType": "audio"
         }
     ]
 }
