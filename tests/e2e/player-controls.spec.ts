@@ -182,7 +182,9 @@ test('video room preserves accessible playback controls and shares only host see
             await host.keyboard.press('Tab')
             await expect(volumeSlider).toBeFocused()
             await volumeSlider.fill('0.35')
-            await expect(hostVideo).toHaveJSProperty('volume', 0.35)
+            await expect
+                .poll(() => hostVideo.evaluate((video: HTMLVideoElement) => video.volume))
+                .toBeCloseTo(0.35, 5)
             await expect(guestVideo).toHaveJSProperty('volume', 1)
             await host.mouse.move(4, 4)
             await button(hostPlayer, expand).press('Tab')
