@@ -37,6 +37,14 @@
     transition: transform 300ms cubic-bezier(0.2, 0.65, 0.35, 1);
 }
 
+.film:not(.featured) .poster[src='media/last-tram.webp'] {
+    object-position: 96% center;
+}
+
+.film:not(.featured) .poster[src='media/lighthouse-window.webp'] {
+    object-position: 4% center;
+}
+
 .film-body {
     display: flex;
     flex-direction: column;

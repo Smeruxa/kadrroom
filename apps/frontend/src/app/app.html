@@ -2,12 +2,40 @@
     <div class="topbar-inner">
         <a class="wordmark" routerLink="/"><span class="mark" aria-hidden="true"></span>KadrRoom</a>
         <nav aria-label="Основная навигация">
-            <a class="catalog-link" routerLink="/">Каталог</a>
-            <a class="join-link" routerLink="/join">Присоединиться</a>
+            <a
+                class="catalog-link"
+                routerLink="/"
+                routerLinkActive
+                [routerLinkActiveOptions]="navActiveOptions"
+                ariaCurrentWhenActive="page"
+                >Каталог</a
+            >
+            <a
+                class="join-link"
+                routerLink="/join"
+                routerLinkActive
+                [routerLinkActiveOptions]="navActiveOptions"
+                ariaCurrentWhenActive="page"
+                >Присоединиться</a
+            >
             @if (account()) {
-                <a class="account-link" routerLink="/account">Аккаунт</a>
+                <a
+                    class="account-link"
+                    routerLink="/account"
+                    routerLinkActive
+                    [routerLinkActiveOptions]="navActiveOptions"
+                    ariaCurrentWhenActive="page"
+                    >Аккаунт</a
+                >
             } @else {
-                <a class="account-link" routerLink="/login">Войти</a>
+                <a
+                    class="account-link"
+                    routerLink="/login"
+                    routerLinkActive
+                    [routerLinkActiveOptions]="navActiveOptions"
+                    ariaCurrentWhenActive="page"
+                    >Войти</a
+                >
             }
         </nav>
     </div>

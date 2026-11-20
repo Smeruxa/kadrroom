@@ -77,11 +77,11 @@
     background: transparent;
 }
 
-:host:has(.layout > kadrroom-catalog-page) .catalog-link {
+.topbar nav .catalog-link[aria-current='page'] {
     color: #d7ef9d;
 }
 
-:host:has(.layout > kadrroom-catalog-page) .catalog-link::after {
+.topbar nav .catalog-link[aria-current='page']::after {
     position: absolute;
     inset: auto 0 -10px;
     height: 2px;

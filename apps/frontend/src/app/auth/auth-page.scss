@@ -302,6 +302,15 @@ dd {
     .artwork {
         display: none;
     }
+
+    .password .secondary {
+        --kr-button-min-height: 44px;
+        inset-block: 2px;
+    }
+
+    .password .secondary:focus-visible {
+        outline-offset: -2px;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
