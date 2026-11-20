@@ -6,21 +6,25 @@
         "node": "^22.22.3 || ^24.15.0 || ^26.0.0"
     },
     "workspaces": [
-        "apps/web",
-        "packages/contracts"
+        "apps/frontend",
+        "apps/admin-frontend",
+        "packages/contracts",
+        "packages/ui"
     ],
     "scripts": {
-        "dev": "npm run dev --workspace apps/web",
-        "build": "npm run build --workspace apps/web",
-        "preview": "npm run preview --workspace apps/web",
-        "format": "prettier --write . && go run ./tools/format-go -write",
-        "format:check": "prettier --check . && go run ./tools/format-go",
-        "lint": "eslint --max-warnings 0 apps/web packages/contracts playwright.config.ts && golangci-lint run ./apps/... ./tools/...",
-        "typecheck": "tsc -p apps/web/tsconfig.json && tsc -p packages/contracts/tsconfig.json && tsc -p tsconfig.json",
-        "test": "npm run test:unit:web && go test -race -cover ./apps/... ./tools/...",
-        "test:unit:web": "node --experimental-test-coverage --test-coverage-include=apps/web/src/catalog.ts --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 --test apps/web/test/*.test.ts",
+        "dev": "npm run dev --workspace apps/frontend",
+        "build": "npm run build --workspace apps/frontend",
+        "build:admin": "npm run build --workspace apps/admin-frontend",
+        "preview": "npm run preview --workspace apps/frontend",
+        "format": "prettier --write . && gofmt -w apps internal",
+        "format:check": "prettier --check . && bash tools/ci/check-go-format.sh apps internal",
+        "lint": "eslint --max-warnings 0 apps/frontend apps/admin-frontend packages tests playwright.config.ts && golangci-lint run ./apps/... ./internal/...",
+        "typecheck": "tsc -p apps/frontend/tsconfig.json && tsc -p apps/admin-frontend/tsconfig.json && tsc -p packages/contracts/tsconfig.json && tsc -p packages/ui/tsconfig.json && tsc -p tsconfig.json",
+        "test": "npm run test:unit:frontend && npm run test:unit:admin && go test -race -cover ./apps/... ./internal/...",
+        "test:unit:frontend": "node --experimental-test-coverage --test-coverage-include=apps/frontend/src/app/catalog/catalog.schema.ts --test-coverage-include=apps/frontend/src/app/shared/validation/parse-payload.ts --test-coverage-include=apps/frontend/src/app/shared/formatting/format-duration.ts --test-coverage-lines=100 --test-coverage-branches=100 --test-coverage-functions=100 --test apps/frontend/test/*.test.ts",
         "test:e2e": "playwright test",
-        "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build"
+        "test:unit:admin": "node --test apps/admin-frontend/test/*.test.ts",
+        "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build && npm run build:admin"
     },
     "devDependencies": {
         "@eslint/js": "^10.0.0",

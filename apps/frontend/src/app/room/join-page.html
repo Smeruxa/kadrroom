@@ -1,0 +1,47 @@
+@let issue = failure();
+<section class="join-panel" aria-labelledby="join-title">
+    <h1 id="join-title">Войти в комнату</h1>
+    @if (issue?.terminal) {
+        <p krNotice="error">{{ issue.message }}</p>
+        <button #replacementControl krButton="primary" type="button" (click)="replaceInvitation()">
+            Вставить другую ссылку
+        </button>
+    } @else if (invite()) {
+        <p>Выберите имя, которое увидят другие участники.</p>
+        <form (submit)="join($event)">
+            <label for="guest-name">Имя в комнате</label>
+            <input
+                #guestNameControl
+                id="guest-name"
+                name="name"
+                type="text"
+                autocomplete="nickname"
+                maxlength="40"
+                required
+            />
+            <button krButton="primary" type="submit" [disabled]="pending()">
+                {{ pending() ? 'Входим…' : 'Присоединиться' }}
+            </button>
+        </form>
+    } @else {
+        <p>Вставьте ссылку, которую отправил ведущий.</p>
+        <form (submit)="openInvitation($event)">
+            <label for="invitation">Ссылка-приглашение</label>
+            <input
+                #invitationControl
+                id="invitation"
+                name="invitation"
+                type="url"
+                inputmode="url"
+                [attr.aria-invalid]="issue ? 'true' : null"
+                [attr.aria-describedby]="issue ? 'join-error' : null"
+                required
+            />
+            <button krButton="primary" type="submit">Открыть приглашение</button>
+        </form>
+    }
+    @if (issue && !issue.terminal) {
+        <p id="join-error" krNotice="error">{{ issue.message }}</p>
+    }
+    <a routerLink="/">Вернуться в каталог</a>
+</section>

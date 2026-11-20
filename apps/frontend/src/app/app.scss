@@ -1,0 +1,173 @@
+:host {
+    --site-gutter: clamp(16px, 4.65vw, 64px);
+    --site-max-width: 1264px;
+    --site-content-width: min(100% - var(--site-gutter) * 2, var(--site-max-width));
+    display: block;
+    min-height: 100svh;
+    background: #121317;
+    color: #f5f3ec;
+}
+
+.topbar {
+    border-bottom: 1px solid #2c3038;
+    background: #16181d;
+}
+
+.topbar-inner,
+.layout {
+    width: var(--site-content-width);
+    margin-inline: auto;
+}
+
+.topbar-inner {
+    display: flex;
+    align-items: center;
+    gap: clamp(16px, 4vw, 56px);
+    min-height: 64px;
+}
+
+.topbar a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.topbar a:focus-visible {
+    outline: 2px solid #d7ef9d;
+    outline-offset: 3px;
+}
+
+.topbar nav {
+    display: flex;
+    flex: 1;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px 10px;
+}
+
+.topbar nav a {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    padding-inline: 14px;
+    font-size: 0.9rem;
+    font-weight: 650;
+    white-space: nowrap;
+    transition:
+        color 150ms ease,
+        background-color 150ms ease,
+        border-color 150ms ease;
+}
+
+.topbar nav a:hover {
+    background: #282d36;
+    color: #faf8f0;
+}
+
+.topbar nav .catalog-link {
+    position: relative;
+    margin-inline-end: auto;
+    padding-inline: 0;
+    color: #c5c9d2;
+}
+
+.topbar nav .catalog-link:hover {
+    background: transparent;
+}
+
+:host:has(.layout > kadrroom-catalog-page) .catalog-link {
+    color: #d7ef9d;
+}
+
+:host:has(.layout > kadrroom-catalog-page) .catalog-link::after {
+    position: absolute;
+    inset: auto 0 -10px;
+    height: 2px;
+    background: #cde98b;
+    content: '';
+}
+
+.topbar .join-link {
+    color: #e1e3e9;
+}
+
+.topbar .account-link {
+    border: 1px solid #515b69;
+    background: #20242c;
+}
+
+.topbar .account-link:hover {
+    border-color: #7e8a9a;
+}
+
+.wordmark {
+    display: inline-flex;
+    flex: none;
+    min-height: 44px;
+    align-items: center;
+    gap: 9px;
+    font-size: clamp(1.05rem, 2vw, 1.43rem);
+    font-weight: 750;
+    letter-spacing: -0.045em;
+}
+
+.mark {
+    position: relative;
+    width: 23px;
+    height: 17px;
+    border: 2px solid #cde98b;
+    border-radius: 4px;
+}
+
+.mark::after {
+    position: absolute;
+    inset: 3px auto auto 7px;
+    width: 0;
+    height: 0;
+    border-block: 3.5px solid transparent;
+    border-left: 5px solid #cde98b;
+    content: '';
+}
+
+.layout {
+    padding-block: clamp(26px, 5vw, 64px) 64px;
+}
+
+.layout:has(> kadrroom-catalog-page) {
+    width: 100%;
+    padding-block-start: 0;
+}
+
+@media (width < 720px) {
+    .topbar nav .catalog-link {
+        display: none;
+    }
+}
+
+@media (width < 560px) {
+    .topbar-inner {
+        min-height: 57px;
+        gap: 8px;
+    }
+
+    .topbar nav {
+        gap: 2px 4px;
+    }
+
+    .topbar nav a {
+        padding-inline: 8px;
+        font-size: 0.82rem;
+    }
+
+    .layout {
+        padding-block-end: 44px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .topbar nav a {
+        transition: none;
+    }
+}

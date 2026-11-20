@@ -1,0 +1,101 @@
+<div class="player">
+    <div class="stage" #stage>
+        @if (source().mediaType === 'audio') {
+            <div class="audio-art" aria-hidden="true"><span></span></div>
+            <audio
+                #player
+                [src]="source().url"
+                preload="metadata"
+                aria-label="Звуковая дорожка комнаты"
+                (loadedmetadata)="mediaReady()"
+                (timeupdate)="updatePosition()"
+                (durationchange)="updatePosition()"
+                (waiting)="buffering.set(true)"
+                (playing)="buffering.set(false)"
+                (ended)="ended()"
+                (error)="sourceFailed.emit()"
+            ></audio>
+        } @else {
+            <video
+                #player
+                [src]="source().url"
+                preload="metadata"
+                playsinline
+                aria-label="Видео комнаты"
+                (loadedmetadata)="mediaReady()"
+                (timeupdate)="updatePosition()"
+                (durationchange)="updatePosition()"
+                (waiting)="buffering.set(true)"
+                (playing)="buffering.set(false)"
+                (ended)="ended()"
+                (error)="sourceFailed.emit()"
+            ></video>
+        }
+        @if (autoplayBlocked()) {
+            <button class="activate" type="button" (click)="enablePlayback()">
+                Включить воспроизведение
+            </button>
+        } @else if (buffering()) {
+            <p class="media-status" role="status">Загружаем медиа…</p>
+        }
+    </div>
+    <div class="controls">
+        <div class="timeline">
+            @if (host()) {
+                <input
+                    type="range"
+                    min="0"
+                    [max]="duration() || 0"
+                    step="0.1"
+                    [value]="preview() ?? position()"
+                    [attr.aria-valuetext]="formatTimecode(preview() ?? position())"
+                    [disabled]="!duration() || !canControl()"
+                    aria-label="Позиция воспроизведения"
+                    (input)="previewSeek($event)"
+                    (change)="seek($event)"
+                />
+            } @else {
+                <progress
+                    [max]="duration() || 1"
+                    [value]="position()"
+                    aria-label="Позиция воспроизведения"
+                ></progress>
+            }
+            <span
+                >{{ formatTimecode(preview() ?? position()) }} /
+                {{ formatTimecode(duration()) }}</span
+            >
+        </div>
+        <div class="control-actions">
+            @if (host()) {
+                <button
+                    class="play-button"
+                    type="button"
+                    [disabled]="!state() || !canControl()"
+                    (click)="toggle()"
+                >
+                    {{ state()?.playing ? 'Пауза' : 'Воспроизвести' }}
+                </button>
+            }
+            <label class="volume">
+                Громкость
+                <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    [value]="volume()"
+                    (input)="changeVolume($event)"
+                />
+            </label>
+            @if (source().mediaType === 'video' && supportsFullscreen) {
+                <button class="secondary fullscreen" type="button" (click)="fullscreen()">
+                    На весь экран
+                </button>
+            }
+        </div>
+    </div>
+    @if (playbackError(); as message) {
+        <p class="player-error" role="alert">{{ message }}</p>
+    }
+</div>

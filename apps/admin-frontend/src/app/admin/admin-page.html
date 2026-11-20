@@ -1,0 +1,202 @@
+<section class="admin">
+    <header class="heading">
+        <h1>Управление каталогом</h1>
+        @if (access() === 'allowed') {
+        <p>Загрузите фильм или аудиозапись и опубликуйте её после обработки.</p>
+        <a class="jump" href="#records-title">К записям</a>
+        }
+    </header>
+
+    @switch (access()) { @case ('checking') {
+    <p class="panel" role="status">Загружаем каталог…</p>
+    } @case ('unauthenticated') {
+    <div class="panel access" role="status">
+        <p>Войдите в аккаунт оператора, чтобы управлять каталогом.</p>
+        <a routerLink="/login">Войти как оператор</a>
+    </div>
+    } @case ('forbidden') {
+    <div class="panel access" role="alert">
+        <p>Управление каталогом доступно операторам.</p>
+        <a routerLink="/login">Войти под другим аккаунтом</a>
+    </div>
+    } @case ('unavailable') {
+    <div class="panel access">
+        <p role="alert">Не удалось загрузить каталог.</p>
+        <button type="button" krButton="secondary" [disabled]="refreshing()" (click)="refresh()">
+            Повторить
+        </button>
+    </div>
+    } @case ('allowed') { @if (feedback(); as message) {
+    <p class="notice" krNotice="success">{{ message }}</p>
+    }
+    <div class="workspace">
+        <section class="panel uploader" aria-labelledby="upload-title">
+            <h2 id="upload-title">Новая запись</h2>
+            <form (submit)="upload($event)">
+                <fieldset [disabled]="uploading()">
+                    <div class="field">
+                        <label for="upload-title-input">Название</label>
+                        <input
+                            id="upload-title-input"
+                            name="title"
+                            type="text"
+                            maxlength="160"
+                            required
+                        />
+                    </div>
+                    <div class="field">
+                        <label for="upload-description">Описание</label>
+                        <textarea
+                            id="upload-description"
+                            name="description"
+                            rows="3"
+                            maxlength="2000"
+                        ></textarea>
+                    </div>
+                    <div class="field">
+                        <label for="upload-type">Тип медиа</label>
+                        <select id="upload-type" name="mediaType">
+                            <option value="video">Видео</option>
+                            <option value="audio">Аудио</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="upload-file">Медиафайл</label>
+                        <div class="file-picker">
+                            <input
+                                #mediaInput
+                                id="upload-file"
+                                name="file"
+                                type="file"
+                                accept="video/*,audio/*,.mp4,.m4a,.webm,.mkv,.mp3,.wav"
+                                aria-describedby="media-file-limit"
+                                required
+                                (change)="
+                                            mediaName.set(mediaInput.files?.item(0)?.name ?? '')
+                                        "
+                            />
+                            <span class="file-button" aria-hidden="true">Выбрать файл</span>
+                            <span class="file-name" aria-hidden="true"
+                                >{{ mediaName() || 'Файл не выбран' }}</span
+                            >
+                        </div>
+                        <span id="media-file-limit" class="hint">До 128 МиБ</span>
+                    </div>
+                    <div class="field">
+                        <label for="upload-cover">Обложка</label>
+                        <div class="file-picker">
+                            <input
+                                #coverInput
+                                id="upload-cover"
+                                name="cover"
+                                type="file"
+                                accept="image/jpeg,image/png,.jpg,.jpeg,.png"
+                                aria-describedby="cover-file-limit"
+                                (change)="
+                                            coverName.set(coverInput.files?.item(0)?.name ?? '')
+                                        "
+                            />
+                            <span class="file-button" aria-hidden="true">Выбрать файл</span>
+                            <span class="file-name" aria-hidden="true"
+                                >{{ coverName() || 'Файл не выбран' }}</span
+                            >
+                        </div>
+                        <span id="cover-file-limit" class="hint"
+                            >JPEG или PNG до 5 МиБ, необязательно</span
+                        >
+                    </div>
+                    <button type="submit" krButton="primary">Загрузить</button>
+                </fieldset>
+            </form>
+            @if (uploading()) {
+            <div class="upload-progress">
+                <p role="status">
+                    {{ percent() === 100 ? 'Файл передан, сохраняем запись…' : 'Загружаем файлы…' }}
+                </p>
+                <progress
+                    [attr.value]="percent()"
+                    max="100"
+                    aria-label="Ход загрузки файлов"
+                ></progress>
+            </div>
+            } @if (uploadError(); as message) {
+            <p class="notice" krNotice="error">{{ message }}</p>
+            }
+        </section>
+
+        <section class="panel records" aria-labelledby="records-title">
+            <header>
+                <h2 id="records-title" tabindex="-1">Записи каталога</h2>
+                <button
+                    type="button"
+                    krButton="secondary"
+                    [disabled]="refreshing()"
+                    (click)="refresh()"
+                >
+                    {{ refreshing() ? 'Обновляем…' : 'Обновить' }}
+                </button>
+            </header>
+            @if (listError(); as message) {
+            <p class="notice" krNotice="error">{{ message }}</p>
+            } @if (actionError(); as message) {
+            <p class="notice" krNotice="error">{{ message }}</p>
+            } @if (items().length) {
+            <ul class="record-list" role="list">
+                @for (item of items(); track item.id) {
+                <li class="record">
+                    <div class="identity">
+                        @if (item.coverUrl) {
+                        <img [src]="item.coverUrl" alt="" loading="lazy" decoding="async" />
+                        }
+                        <div>
+                            <h3>{{ item.title }}</h3>
+                            <p class="hint">
+                                {{ item.mediaType === 'audio' ? 'Аудио' : 'Видео' }} @if
+                                (item.durationSeconds > 0) { · {{
+                                formatDuration(item.durationSeconds) }} }
+                            </p>
+                        </div>
+                    </div>
+                    <div class="record-actions">
+                        <span class="status" [attr.data-status]="item.status"
+                            >{{ statusLabels[item.status] }}</span
+                        >
+                        @if (item.status === 'ready') {
+                        <button
+                            type="button"
+                            krButton="primary"
+                            [disabled]="activeItem() !== null"
+                            (click)="update(item, 'publish')"
+                        >
+                            {{ activeItem() === item.id ? 'Публикуем…' : 'Опубликовать' }}
+                        </button>
+                        } @else if (item.status === 'published') {
+                        <button
+                            type="button"
+                            krButton="secondary"
+                            [disabled]="activeItem() !== null"
+                            (click)="update(item, 'unpublish')"
+                        >
+                            {{ activeItem() === item.id ? 'Снимаем…' : 'Снять с публикации' }}
+                        </button>
+                        } @else if (item.status === 'failed') {
+                        <button
+                            type="button"
+                            krButton="secondary"
+                            [disabled]="activeItem() !== null"
+                            (click)="update(item, 'retry')"
+                        >
+                            {{ activeItem() === item.id ? 'Отправляем…' : 'Повторить обработку' }}
+                        </button>
+                        }
+                    </div>
+                </li>
+                }
+            </ul>
+            } @else {
+            <p class="empty">Здесь появятся загруженные фильмы и аудиозаписи.</p>
+            }
+        </section>
+    </div>
+    } }
+</section>

@@ -1,0 +1,184 @@
+:host {
+    display: block;
+    min-width: 0;
+}
+
+.call {
+    display: grid;
+    min-width: 0;
+    gap: 10px;
+    padding: 15px;
+    border: 1px solid var(--room-border);
+    border-radius: 13px;
+    background: var(--room-surface);
+    overflow-wrap: anywhere;
+}
+
+h2 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 690;
+    letter-spacing: -0.02em;
+}
+
+p,
+label {
+    margin: 0;
+    color: var(--room-muted);
+    font-size: 0.85rem;
+    line-height: 1.45;
+}
+
+p[role='status'] {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+
+    &::before {
+        flex: none;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #89b8e0;
+        content: '';
+    }
+}
+
+.call[data-state='unavailable'] p[role='status']::before {
+    background: #e8ad9f;
+}
+
+.call[data-state='reconnecting'] p[role='status']::before {
+    background: #ecc681;
+}
+
+.call[data-state='connected'] p[role='status']::before {
+    background: #a9cb78;
+}
+
+.controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+}
+
+button {
+    width: fit-content;
+    max-width: 100%;
+    min-height: 36px;
+    padding: 7px 10px;
+    border: 1px solid #4a5362;
+    border-radius: 8px;
+    background: #222733;
+    color: var(--room-text);
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition:
+        background var(--room-motion),
+        border-color var(--room-motion);
+
+    &:hover:not(:disabled) {
+        border-color: #657185;
+        background: #303746;
+    }
+
+    &:disabled {
+        opacity: 0.65;
+        cursor: default;
+    }
+}
+
+.controls button {
+    width: 100%;
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+button.primary {
+    border-color: #668452;
+    background: #2a3a23;
+    color: #d2eea2;
+
+    &:hover:not(:disabled) {
+        border-color: #8b9f67;
+        background: #354a2a;
+    }
+}
+
+button[aria-pressed='true'] {
+    border-color: var(--room-accent);
+    background: var(--room-accent);
+    color: var(--room-accent-text);
+
+    &:hover:not(:disabled) {
+        background: var(--room-accent-hover);
+    }
+}
+
+button:focus-visible,
+input:focus-visible {
+    outline: 2px solid var(--room-focus);
+    outline-offset: 3px;
+}
+
+label {
+    display: grid;
+    gap: 4px;
+}
+
+input {
+    width: 100%;
+    min-height: 22px;
+    margin: 0;
+    accent-color: var(--room-accent);
+}
+
+.error {
+    color: #ffd1bf;
+}
+
+.cameras {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 92px), 1fr));
+    gap: 8px;
+}
+
+figure {
+    min-width: 0;
+    margin: 0;
+}
+
+video {
+    display: block;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    border: 1px solid var(--room-border);
+    border-radius: 8px;
+    background: var(--room-stage);
+    object-fit: cover;
+}
+
+figcaption {
+    margin-block-start: 4px;
+    color: var(--room-text);
+    font-size: 0.8125rem;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .call[data-state='connecting'] p[role='status']::before,
+    .call[data-state='reconnecting'] p[role='status']::before {
+        animation: waiting 1.25s ease-in-out infinite alternate;
+    }
+}
+
+@keyframes waiting {
+    from {
+        opacity: 0.55;
+    }
+
+    to {
+        opacity: 1;
+    }
+}

@@ -1,0 +1,17 @@
+<header class="topbar">
+    <div class="topbar-inner">
+        <a class="wordmark" routerLink="/"><span class="mark" aria-hidden="true"></span>KadrRoom</a>
+        <nav aria-label="Основная навигация">
+            <a class="catalog-link" routerLink="/">Каталог</a>
+            <a class="join-link" routerLink="/join">Присоединиться</a>
+            @if (account()) {
+                <a class="account-link" routerLink="/account">Аккаунт</a>
+            } @else {
+                <a class="account-link" routerLink="/login">Войти</a>
+            }
+        </nav>
+    </div>
+</header>
+<main class="layout">
+    <router-outlet />
+</main>

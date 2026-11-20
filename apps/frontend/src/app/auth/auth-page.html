@@ -1,0 +1,149 @@
+<section class="layout" [class.account]="mode === 'account'">
+    <div class="panel">
+        @let unavailableLink = linkError();
+        <header class="heading">
+            <h1>{{ copy.title }}</h1>
+            @if (copy.description && !complete() && !unavailableLink) {
+                <p class="description">{{ copy.description }}</p>
+            }
+        </header>
+
+        @if (mode === 'account') {
+            @if (account(); as profile) {
+                <dl>
+                    <div>
+                        <dt>Имя</dt>
+                        <dd>{{ profile.displayName }}</dd>
+                    </div>
+                    <div>
+                        <dt>Почта</dt>
+                        <dd>{{ profile.email }}</dd>
+                    </div>
+                </dl>
+                <form (submit)="submit($event)">
+                    <button type="submit" krButton="primary" [disabled]="pending()">
+                        {{ copy.submit }}
+                    </button>
+                </form>
+                <a routerLink="/forgot-password">Сменить пароль через почту</a>
+            } @else if (account() === undefined) {
+                <p role="status">Загружаем аккаунт…</p>
+            } @else {
+                <a routerLink="/login" [queryParams]="continuation">Войдите в аккаунт</a>
+            }
+        } @else if (complete()) {
+            @if (mode === 'register' || mode === 'forgot') {
+                <p class="notice" krNotice="success">
+                    <strong>Проверьте почту.</strong> Если письмо можно отправить на этот адрес, оно
+                    придёт в ближайшее время.
+                </p>
+                <button
+                    class="secondary"
+                    krButton="secondary"
+                    type="button"
+                    [disabled]="!resendReady() || pending()"
+                    (click)="resend()"
+                >
+                    Отправить письмо ещё раз
+                </button>
+                @if (!resendReady()) {
+                    <p class="hint">Повторная отправка доступна через 30 секунд.</p>
+                }
+            } @else {
+                <p class="notice" krNotice="success">
+                    {{ mode === 'verify' ? 'Аккаунт подтверждён.' : 'Пароль изменён.' }}
+                </p>
+                <a class="action" routerLink="/login" [queryParams]="continuation">Войти</a>
+            }
+        } @else if (unavailableLink) {
+            <p class="notice" krNotice="error">{{ unavailableLink }}</p>
+            <a
+                #requestLink
+                class="action"
+                [routerLink]="mode === 'verify' ? '/register' : '/forgot-password'"
+                [queryParams]="continuation"
+            >
+                Запросить новую ссылку
+            </a>
+        } @else {
+            <form (submit)="submit($event)">
+                @if (mode === 'login' || mode === 'register' || mode === 'forgot') {
+                    <div class="field">
+                        <label for="auth-email">Почта</label>
+                        <input
+                            id="auth-email"
+                            name="email"
+                            type="email"
+                            autocomplete="email"
+                            maxlength="254"
+                            required
+                        />
+                    </div>
+                }
+                @if (mode === 'verify') {
+                    <div class="field">
+                        <label for="display-name">Имя в комнате</label>
+                        <input
+                            id="display-name"
+                            name="displayName"
+                            type="text"
+                            autocomplete="nickname"
+                            maxlength="60"
+                            required
+                        />
+                    </div>
+                }
+                @if (mode === 'login' || mode === 'verify' || mode === 'reset') {
+                    <div class="field">
+                        <label for="auth-password">{{
+                            mode === 'reset' ? 'Новый пароль' : 'Пароль'
+                        }}</label>
+                        <div class="password">
+                            <input
+                                id="auth-password"
+                                name="password"
+                                [type]="passwordVisible() ? 'text' : 'password'"
+                                [attr.autocomplete]="
+                                    mode === 'login' ? 'current-password' : 'new-password'
+                                "
+                                [attr.minlength]="mode === 'login' ? null : 15"
+                                [attr.aria-describedby]="mode === 'login' ? null : 'password-hint'"
+                                required
+                            />
+                            <button
+                                type="button"
+                                krButton="secondary"
+                                class="secondary"
+                                (click)="togglePassword()"
+                            >
+                                {{ passwordVisible() ? 'Скрыть' : 'Показать' }}
+                            </button>
+                        </div>
+                        @if (mode !== 'login') {
+                            <p id="password-hint" class="hint">Не менее 15 символов.</p>
+                        }
+                    </div>
+                }
+                <button type="submit" krButton="primary" [disabled]="pending()">
+                    {{ pending() ? 'Подождите…' : copy.submit }}
+                </button>
+            </form>
+        }
+
+        @if (error(); as message) {
+            <p class="notice" krNotice="error">{{ message }}</p>
+        }
+
+        @if (mode === 'login') {
+            <nav class="links" aria-label="Доступ к аккаунту">
+                <a routerLink="/register" [queryParams]="continuation">Создать аккаунт</a>
+                <a routerLink="/forgot-password" [queryParams]="continuation">Забыли пароль?</a>
+            </nav>
+        } @else if (mode !== 'account' && !complete()) {
+            <a routerLink="/login" [queryParams]="continuation">Вернуться ко входу</a>
+        }
+    </div>
+    @if (mode !== 'account') {
+        <div class="artwork" aria-hidden="true"></div>
+    }
+</section>

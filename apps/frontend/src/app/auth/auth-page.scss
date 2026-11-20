@@ -1,0 +1,317 @@
+.layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.14fr) minmax(0, 1fr);
+    align-items: center;
+    min-height: clamp(36rem, 47vw, 40rem);
+    overflow: hidden;
+    border: 1px solid #30343d;
+    border-radius: 24px;
+    background: #17191f;
+    box-shadow: 0 18px 55px rgb(0 0 0 / 22%);
+}
+
+.layout.account {
+    width: min(100%, 28rem);
+    min-height: 0;
+    margin-inline: auto;
+    grid-template-columns: minmax(0, 1fr);
+    overflow: visible;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.artwork {
+    grid-area: 1 / 1;
+    align-self: stretch;
+    border-inline-end: 1px solid #30343d;
+    background:
+        linear-gradient(90deg, transparent 85%, rgb(12 15 23 / 18%)),
+        url('/media/last-tram.webp') 82% center / cover,
+        #171e2a;
+}
+
+.panel {
+    --auth-accent: #d4eb8d;
+    --auth-accent-hover: #e3f3ad;
+    --auth-accent-text: #1d2412;
+    --kr-focus: #d7ef9d;
+    --kr-button-primary-background: var(--auth-accent);
+    --kr-button-primary-hover-background: var(--auth-accent-hover);
+    --kr-button-primary-color: var(--auth-accent-text);
+    --kr-button-min-height: 48px;
+    --kr-button-radius: 10px;
+    --kr-button-font-size: 0.9375rem;
+    --kr-notice-padding: 11px 13px;
+    --kr-notice-radius: 10px;
+    --kr-notice-error-background: #302420;
+    --kr-notice-error-border: #875d53;
+    --kr-notice-error-color: #ffe2d9;
+    --kr-notice-success-background: #242c20;
+    --kr-notice-success-border: #596b4d;
+    --kr-notice-success-color: #e1eccf;
+
+    grid-area: 1 / 2;
+    display: grid;
+    width: min(calc(100% - 48px), 27rem);
+    margin: 32px auto;
+    gap: 20px;
+    padding: clamp(22px, 3vw, 34px);
+    border: 1px solid #363c48;
+    border-radius: 18px;
+    background: #17191f;
+    color: #f3f3ee;
+    animation: panel-enter 210ms ease-out both;
+}
+
+.account .panel {
+    grid-column: 1;
+    width: 100%;
+    margin: 0;
+}
+
+.heading {
+    display: grid;
+    gap: 8px;
+}
+
+h1 {
+    margin: 0;
+    font-size: clamp(1.875rem, 3vw, 2.625rem);
+    font-weight: 730;
+    line-height: 1.04;
+    letter-spacing: -0.045em;
+    text-wrap: balance;
+    overflow-wrap: anywhere;
+}
+
+p {
+    margin: 0;
+    line-height: 1.5;
+}
+
+.description {
+    color: #bfc6d2;
+    font-size: 0.9375rem;
+}
+
+form,
+.field {
+    display: grid;
+    min-width: 0;
+    margin: 0;
+}
+
+form {
+    gap: 16px;
+}
+
+.field {
+    gap: 7px;
+}
+
+label,
+dt {
+    color: #dfe3ed;
+    font-size: 0.875rem;
+    font-weight: 650;
+}
+
+input {
+    width: 100%;
+    min-width: 0;
+    min-height: 48px;
+    padding: 10px 12px;
+    border: 1px solid #646e7e;
+    border-radius: 10px;
+    background: #101218;
+    color: #f3f3ee;
+    font: inherit;
+    transition: border-color 150ms ease;
+}
+
+input:hover {
+    border-color: #8792a3;
+}
+
+.password {
+    position: relative;
+}
+
+.password input {
+    padding-inline-end: 112px;
+}
+
+.password .secondary {
+    --kr-button-min-height: 36px;
+    --kr-button-padding: 6px 11px;
+    --kr-button-secondary-border: transparent;
+    --kr-button-secondary-background: transparent;
+    --kr-button-secondary-color: #cdd5e1;
+    --kr-button-secondary-hover-background: #262d38;
+    --kr-button-secondary-hover-border: #434b5a;
+
+    position: absolute;
+    inset-block: 6px;
+    inset-inline-end: 5px;
+}
+
+form > button,
+.action {
+    --kr-button-width: 100%;
+    margin-block-start: 2px;
+}
+
+.action {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: var(--kr-button-min-height);
+    padding: 9px 14px;
+    border: 1px solid transparent;
+    border-radius: var(--kr-button-radius);
+    background: var(--auth-accent);
+    color: var(--auth-accent-text);
+    font-size: var(--kr-button-font-size);
+    font-weight: 700;
+    line-height: 1.375;
+    text-align: center;
+    text-decoration: none;
+    transition: background-color 150ms ease;
+}
+
+.action:hover {
+    background: var(--auth-accent-hover);
+    color: var(--auth-accent-text);
+}
+
+a {
+    width: fit-content;
+    color: #cdd5e1;
+    font-size: 0.875rem;
+    line-height: 1.45;
+    text-decoration-color: #858fa0;
+    text-underline-offset: 3px;
+    transition:
+        color 150ms ease,
+        text-decoration-color 150ms ease;
+}
+
+a:hover {
+    color: var(--auth-accent-hover);
+    text-decoration-color: currentColor;
+}
+
+a:focus-visible,
+input:focus-visible {
+    outline: 2px solid var(--kr-focus);
+    outline-offset: 3px;
+}
+
+.links {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 8px 18px;
+    padding-block-start: 15px;
+    border-block-start: 1px solid #333946;
+}
+
+.hint {
+    color: #aeb8c8;
+    font-size: 0.8125rem;
+}
+
+.notice {
+    font-size: 0.875rem;
+}
+
+dl {
+    display: grid;
+    gap: 16px;
+    margin: 0;
+}
+
+dd {
+    margin: 5px 0 0;
+    overflow-wrap: anywhere;
+}
+
+@keyframes panel-enter {
+    from {
+        opacity: 0.85;
+        transform: translateY(5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (width >= 640px) {
+    .layout:not(.account) .panel {
+        border-color: transparent;
+        background: transparent;
+    }
+}
+
+@media (width >= 900px) {
+    .layout:not(.account) .panel {
+        align-self: start;
+        margin-block: clamp(42px, calc(9vw - 50px), 80px) 10px;
+    }
+}
+
+@media (width < 900px) {
+    .layout {
+        width: min(100%, 38rem);
+        min-height: 0;
+        margin-inline: auto;
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .panel {
+        grid-area: 1 / 1;
+        margin: 27px auto;
+    }
+
+    .artwork {
+        grid-area: 2 / 1;
+        min-height: 200px;
+        border-block-start: 1px solid #30343d;
+        border-inline-end: 0;
+        background-position: center 51%;
+    }
+}
+
+@media (width < 640px) {
+    .layout {
+        overflow: visible;
+        border: 0;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .panel {
+        width: 100%;
+        margin: 0;
+    }
+
+    .artwork {
+        display: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .panel {
+        animation: none;
+    }
+
+    input,
+    a,
+    .action {
+        transition: none;
+    }
+}

@@ -1,0 +1,43 @@
+<article class="film" [class.featured]="featured()">
+    <div class="artwork" aria-hidden="true">
+        @if (poster(); as artwork) {
+            <img
+                class="poster"
+                [src]="artwork"
+                alt=""
+                [attr.fetchpriority]="featured() ? 'high' : 'auto'"
+                [loading]="featured() ? 'eager' : 'lazy'"
+                (error)="hidePoster(artwork)"
+            />
+        }
+    </div>
+    <div class="film-body">
+        <h2>{{ item().title }}</h2>
+        <p class="description">{{ item().description }}</p>
+        <div class="film-facts">
+            <span class="media-type">{{ item().mediaType === 'audio' ? 'Музыка' : 'Фильм' }}</span>
+            @if (item().durationSeconds > 0) {
+                <span class="duration">{{ duration() }}</span>
+            }
+            <span class="availability" [class.available]="item().available">
+                {{
+                    item().available
+                        ? 'Доступен'
+                        : item().mediaType === 'audio'
+                          ? 'Аудио недоступно'
+                          : 'Видео недоступно'
+                }}
+            </span>
+        </div>
+        @if (item().available) {
+            <button
+                class="room-action"
+                type="button"
+                [disabled]="creating()"
+                (click)="create.emit(item())"
+            >
+                {{ creating() ? 'Создаём комнату…' : 'Создать комнату' }}
+            </button>
+        }
+    </div>
+</article>

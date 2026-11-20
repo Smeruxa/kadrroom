@@ -11,7 +11,13 @@ export default defineConfig(
         '**/playwright-report/**',
     ]),
     {
-        files: ['apps/web/**/*.ts', 'packages/contracts/**/*.ts', 'playwright.config.ts'],
+        files: [
+            'apps/{frontend,admin-frontend}/**/*.ts',
+            'packages/contracts/**/*.ts',
+            'packages/ui/**/*.ts',
+            'tests/**/*.ts',
+            'playwright.config.ts',
+        ],
         extends: [js.configs.recommended, tseslint.configs.strictTypeChecked],
         languageOptions: {
             parserOptions: {
@@ -31,12 +37,15 @@ export default defineConfig(
         },
     },
     {
-        files: ['apps/web/src/**/*.ts'],
+        files: ['apps/{frontend,admin-frontend}/src/**/*.ts'],
         extends: [angular.configs.tsRecommended],
         processor: angular.processInlineTemplates,
+        rules: {
+            '@typescript-eslint/no-extraneous-class': ['error', { allowWithDecorator: true }],
+        },
     },
     {
-        files: ['apps/web/src/**/*.html'],
+        files: ['apps/{frontend,admin-frontend}/src/**/*.html'],
         extends: [angular.configs.templateRecommended, angular.configs.templateAccessibility],
     },
 )

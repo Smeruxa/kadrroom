@@ -1,0 +1,33 @@
+<section class="login">
+    <header>
+        <h1>Вход для операторов</h1>
+        <p>Войдите, чтобы управлять каталогом KadrRoom.</p>
+    </header>
+    <form (submit)="login($event)">
+        <fieldset [disabled]="pending()">
+            <div class="field">
+                <label for="email">Почта</label>
+                <input id="email" name="email" type="email" autocomplete="username" required />
+            </div>
+            <div class="field">
+                <label for="password">Пароль</label>
+                <div class="password-field">
+                    <input
+                        id="password"
+                        name="password"
+                        [type]="visible() ? 'text' : 'password'"
+                        autocomplete="current-password"
+                        required
+                    />
+                    <button krButton="secondary" type="button" (click)="togglePassword()">
+                        {{ visible() ? 'Скрыть' : 'Показать' }}
+                    </button>
+                </div>
+            </div>
+            <button type="submit" krButton="primary">{{ pending() ? 'Входим…' : 'Войти' }}</button>
+        </fieldset>
+    </form>
+    @if (error(); as message) {
+    <p krNotice="error">{{ message }}</p>
+    }
+</section>

@@ -1,0 +1,17 @@
+{
+    "/v1/auth/session": {
+        "target": "http://127.0.0.1:8081"
+    },
+    "/v1/auth/login": {
+        "target": "http://127.0.0.1:8081"
+    },
+    "/v1/auth/logout": {
+        "target": "http://127.0.0.1:8081"
+    },
+    "/v1/admin/**": {
+        "target": "http://127.0.0.1:8083"
+    },
+    "/v1/covers/**": {
+        "target": "http://127.0.0.1:8080"
+    }
+}

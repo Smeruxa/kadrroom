@@ -6,7 +6,7 @@
     "printWidth": 100,
     "overrides": [
         {
-            "files": "apps/web/src/**/*.html",
+            "files": "apps/frontend/src/**/*.html",
             "options": { "parser": "angular" }
         }
     ]

@@ -1,0 +1,25 @@
+:host {
+    --notice-border: var(--kr-notice-info-border, #3c5468);
+    --notice-background: var(--kr-notice-info-background, #1b2a38);
+    --notice-color: var(--kr-notice-info-color, #c5e7fb);
+    display: block;
+    margin: 0;
+    padding: var(--kr-notice-padding, 10px 13px);
+    border: 1px solid var(--notice-border);
+    border-radius: var(--kr-notice-radius, 9px);
+    background: var(--notice-background);
+    color: var(--notice-color);
+    overflow-wrap: anywhere;
+}
+
+:host([data-kr-notice='success']) {
+    --notice-border: var(--kr-notice-success-border, #526d47);
+    --notice-background: var(--kr-notice-success-background, #263328);
+    --notice-color: var(--kr-notice-success-color, #d8edc9);
+}
+
+:host([data-kr-notice='error']) {
+    --notice-border: var(--kr-notice-error-border, #86564e);
+    --notice-background: var(--kr-notice-error-background, #332320);
+    --notice-color: var(--kr-notice-error-color, #ffdbd3);
+}

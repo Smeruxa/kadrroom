@@ -1,0 +1,126 @@
+.login,
+.login header,
+fieldset,
+.field {
+    display: grid;
+}
+
+.login {
+    width: min(100%, 464px);
+    gap: 26px;
+    margin: clamp(10px, 5vh, 60px) auto 0;
+    padding: clamp(22px, 4vw, 36px);
+    border: 1px solid #424a54;
+    border-radius: 20px;
+    background: linear-gradient(158deg, #222833, var(--surface) 48%);
+    box-shadow: 0 24px 70px rgb(0 0 0 / 24%);
+}
+
+.login header {
+    gap: 10px;
+}
+
+h1,
+p {
+    margin: 0;
+}
+
+h1 {
+    font-size: clamp(1.75rem, 4.45vw, 2.3rem);
+    font-weight: 705;
+    line-height: 1.08;
+    letter-spacing: -0.045em;
+    text-wrap: balance;
+}
+
+header p {
+    color: var(--muted);
+    line-height: 1.55;
+}
+
+fieldset {
+    min-inline-size: 0;
+    gap: 17px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.field {
+    gap: 7px;
+}
+
+label {
+    color: var(--text);
+    font-size: 0.875rem;
+    font-weight: 635;
+}
+
+.password-field {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+}
+
+input {
+    min-height: 45px;
+    border-radius: 9px;
+    font: inherit;
+}
+
+input {
+    width: 100%;
+    min-width: 0;
+    padding: 8px 12px;
+    border: 1px solid #484f5b;
+    background: var(--field);
+    color: var(--text);
+    transition:
+        border-color var(--transition-duration),
+        background var(--transition-duration);
+
+    &:hover {
+        border-color: #5d6776;
+    }
+
+    &:focus {
+        border-color: #829b56;
+    }
+}
+
+button {
+    --kr-button-width: 100%;
+    --kr-button-min-height: 45px;
+    --kr-button-padding: 9px 13px;
+    --kr-button-font-size: 1rem;
+}
+
+button[data-kr-button='secondary'] {
+    --kr-button-font-size: 0.875rem;
+    --kr-button-secondary-border: #484f5b;
+    --kr-button-secondary-background: #262c36;
+    --kr-button-secondary-hover-border: #5d6776;
+    --kr-button-secondary-hover-background: #303744;
+}
+
+fieldset:disabled {
+    opacity: 0.7;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .login {
+        animation: reveal 210ms var(--ease-out) both;
+    }
+}
+
+@keyframes reveal {
+    from {
+        opacity: 0.4;
+        transform: translateY(6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

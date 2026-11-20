@@ -1,10 +1,12 @@
 import { defineConfig } from '@playwright/test'
 
-const baseURL = 'http://127.0.0.1:5173'
+const externalURL = process.env['KADRROOM_E2E_BASE_URL']
+const baseURL = externalURL || 'http://127.0.0.1:5173'
 const reuseExistingServer = !process.env['CI']
 
 export default defineConfig({
-    testDir: './apps/web/e2e',
+    testDir: '.',
+    testMatch: ['**/apps/frontend/e2e/*.spec.ts', '**/tests/e2e/*.spec.ts'],
     fullyParallel: true,
     use: { baseURL, trace: 'retain-on-failure' },
     projects: [
@@ -15,18 +17,22 @@ export default defineConfig({
             use: { browserName: 'webkit' },
         },
     ],
-    webServer: [
-        {
-            command: 'go run ./apps/catalog-api',
-            url: 'http://127.0.0.1:8080/healthz',
-            reuseExistingServer,
-            timeout: 120_000,
-        },
-        {
-            command: 'npm run dev',
-            url: baseURL,
-            reuseExistingServer,
-            timeout: 120_000,
-        },
-    ],
+    ...(externalURL
+        ? {}
+        : {
+              webServer: [
+                  {
+                      command: 'go run ./apps/catalog-api',
+                      url: 'http://127.0.0.1:8080/healthz',
+                      reuseExistingServer,
+                      timeout: 120_000,
+                  },
+                  {
+                      command: 'npm run dev',
+                      url: baseURL,
+                      reuseExistingServer,
+                      timeout: 120_000,
+                  },
+              ],
+          }),
 })

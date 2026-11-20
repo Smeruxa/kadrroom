@@ -1,0 +1,87 @@
+.topbar {
+    position: sticky;
+    z-index: 2;
+    inset-block-start: 0;
+    border-bottom: 1px solid #343943;
+    background: rgb(19 22 27 / 92%);
+    backdrop-filter: blur(14px);
+}
+
+.header-inner,
+.layout {
+    width: min(100% - clamp(36px, 7vw, 88px), 1220px);
+    margin-inline: auto;
+}
+
+.header-inner,
+.account,
+.wordmark {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.header-inner {
+    justify-content: space-between;
+    min-height: 62px;
+}
+
+.wordmark {
+    flex: none;
+    width: fit-content;
+    gap: 8px;
+    border-radius: 4px;
+    color: var(--text);
+    font-size: 1.16rem;
+    font-weight: 730;
+    letter-spacing: -0.045em;
+    text-decoration: none;
+}
+
+.mark {
+    position: relative;
+    width: 22px;
+    height: 16px;
+    border: 2px solid var(--accent);
+    border-radius: 5px;
+
+    &::after {
+        position: absolute;
+        inset: 3px auto auto 7px;
+        border-block: 3px solid transparent;
+        border-left: 5px solid var(--accent);
+        content: '';
+    }
+}
+
+.account {
+    min-width: 0;
+    color: var(--muted);
+    font-size: 0.875rem;
+}
+
+.account span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+button {
+    --kr-button-padding: 7px 13px;
+    --kr-button-secondary-border: #424854;
+    --kr-button-secondary-background: #242832;
+    --kr-button-secondary-hover-border: #5c6472;
+    --kr-button-secondary-hover-background: #2e3440;
+    flex: none;
+}
+
+.layout {
+    padding-block: clamp(30px, 4.5vw, 58px) 60px;
+}
+
+.notice {
+    --kr-notice-padding: 10px 14px;
+    --kr-notice-radius: 8px;
+    width: fit-content;
+    margin: 0 0 18px;
+}

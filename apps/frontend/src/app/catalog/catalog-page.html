@@ -1,0 +1,69 @@
+@let catalog = state();
+<header class="collection-header">
+    <h1>Каталог</h1>
+    @if (catalog.status === 'loaded' && catalog.items.length) {
+        <div class="filters" role="group" aria-label="Тип медиа">
+            <button
+                type="button"
+                [attr.aria-pressed]="filter() === 'all'"
+                (click)="filter.set('all')"
+            >
+                Всё
+            </button>
+            <button
+                type="button"
+                [attr.aria-pressed]="filter() === 'video'"
+                (click)="filter.set('video')"
+            >
+                Фильмы
+            </button>
+            <button
+                type="button"
+                [attr.aria-pressed]="filter() === 'audio'"
+                (click)="filter.set('audio')"
+            >
+                Музыка
+            </button>
+        </div>
+    }
+</header>
+@if (selectedMedia(); as selection) {
+    <p class="status-note" krNotice="info">Для комнаты выбрано «{{ selection.title }}».</p>
+}
+@if (roomError(); as message) {
+    <p class="status-note" krNotice="error">{{ message }}</p>
+}
+@switch (catalog.status) {
+    @case ('loading') {
+        <div class="catalog-loading">
+            <p role="status">Загружаем каталог…</p>
+        </div>
+    }
+    @case ('error') {
+        <div class="catalog-error">
+            <p krNotice="error">Не удалось загрузить каталог</p>
+            <button krButton="primary" type="button" (click)="loadCatalog()">Повторить</button>
+        </div>
+    }
+    @case ('loaded') {
+        @if (visibleItems().length) {
+            <ul class="catalog" [class.catalog-filtered]="filter() !== 'all'" role="list">
+                @for (item of visibleItems(); track item.id; let first = $first) {
+                    @let featured = first && filter() === 'all' && item.available;
+                    <li [class.catalog-featured]="featured">
+                        <kadrroom-catalog-card
+                            [item]="item"
+                            [featured]="featured"
+                            [creating]="creating() === item.id"
+                            (create)="createRoom($event)"
+                        />
+                    </li>
+                }
+            </ul>
+        } @else if (!catalog.items.length) {
+            <p class="status-note" krNotice="info">В каталоге пока нет фильмов.</p>
+        } @else {
+            <p class="status-note" krNotice="info">В этой подборке пока нет записей.</p>
+        }
+    }
+}

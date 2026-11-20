@@ -1,0 +1,152 @@
+<section class="room">
+    <header>
+        <div>
+            <a class="catalog-link" routerLink="/">Каталог</a>
+            <h1>{{ title() }}</h1>
+        </div>
+        @if (room(); as active) {
+            <p class="role">{{ active.role === 'host' ? 'Ведущий' : 'Гость' }}</p>
+        }
+    </header>
+
+    @if (error(); as message) {
+        <p class="notice" role="alert">{{ message }}</p>
+    }
+    @if (loading()) {
+        <p role="status">Открываем комнату…</p>
+    } @else if (connection() === 'ended') {
+        <a routerLink="/">Вернуться в каталог</a>
+    } @else if (room(); as active) {
+        <p
+            class="connection"
+            role="status"
+            [attr.data-state]="
+                connection() === 'online' && active.role === 'guest' && hostConnected() === false
+                    ? 'waiting'
+                    : connection()
+            "
+        >
+            @switch (connection()) {
+                @case ('opening') {
+                    Подключаемся…
+                }
+                @case ('online') {
+                    @if (active.role === 'guest' && hostConnected() === false) {
+                        Ждём возвращения ведущего.
+                    } @else {
+                        Синхронизация включена
+                    }
+                }
+                @case ('reconnecting') {
+                    Восстанавливаем связь…
+                }
+            }
+        </p>
+        <div class="content">
+            <div class="viewer">
+                @if (source(); as media) {
+                    <kadrroom-playback
+                        [source]="media"
+                        [state]="snapshot()"
+                        [offsetMs]="clockOffset()"
+                        [host]="active.role === 'host'"
+                        [canControl]="canControl()"
+                        (playbackCommand)="sendCommand($event)"
+                        (sourceFailed)="onMediaError()"
+                    />
+                } @else {
+                    <div class="placeholder">
+                        @if (sourceError(); as message) {
+                            <p role="alert">{{ message }}</p>
+                            <button type="button" (click)="retrySource()">
+                                Загрузить медиа заново
+                            </button>
+                        } @else {
+                            <p role="status">Загружаем медиа…</p>
+                        }
+                    </div>
+                }
+            </div>
+            <aside>
+                <section>
+                    <h2>
+                        Участники <span>{{ participants().length }}/5</span>
+                    </h2>
+                    <ul>
+                        @for (participant of participants(); track participant.id) {
+                            <li>
+                                <span>{{ participant.name }}</span>
+                                <span class="participant-role"
+                                    >{{ participant.role === 'host' ? 'Ведущий' : 'Гость'
+                                    }}{{
+                                        participant.id === active.participantId ? ' · Вы' : ''
+                                    }}</span
+                                >
+                            </li>
+                        }
+                    </ul>
+                </section>
+                @defer (on immediate) {
+                    <kadrroom-room-call [roomId]="active.roomId" />
+                }
+                @if (active.role === 'host') {
+                    <section class="invite">
+                        <h2>Приглашение</h2>
+                        @if (inviteURL(); as link) {
+                            <label for="invitation">Ссылка для гостя</label>
+                            <input #invitation id="invitation" type="url" [value]="link" readonly />
+                            <button type="button" (click)="copyInvite(invitation)">
+                                Копировать ссылку
+                            </button>
+                        }
+                        <button
+                            class="secondary"
+                            type="button"
+                            [disabled]="invitePending()"
+                            (click)="rotateInvite()"
+                        >
+                            {{ inviteURL() ? 'Обновить ссылку' : 'Создать ссылку' }}
+                        </button>
+                        @if (inviteNotice(); as message) {
+                            <p class="small" role="status">{{ message }}</p>
+                        }
+                    </section>
+                    @if (confirmClose()) {
+                        <section class="close-confirm">
+                            <p>Просмотр завершится для всех участников.</p>
+                            <div>
+                                <button
+                                    type="button"
+                                    [disabled]="closePending()"
+                                    (click)="closeRoom()"
+                                >
+                                    Завершить просмотр
+                                </button>
+                                <button
+                                    class="secondary"
+                                    type="button"
+                                    [disabled]="closePending()"
+                                    (click)="confirmClose.set(false)"
+                                >
+                                    Отмена
+                                </button>
+                            </div>
+                        </section>
+                    } @else {
+                        <button
+                            class="secondary leave"
+                            type="button"
+                            (click)="confirmClose.set(true)"
+                        >
+                            Закрыть комнату
+                        </button>
+                    }
+                } @else {
+                    <a class="leave" routerLink="/">Покинуть комнату</a>
+                }
+            </aside>
+        </div>
+    } @else {
+        <button type="button" (click)="loadRoom()">Повторить</button>
+    }
+</section>

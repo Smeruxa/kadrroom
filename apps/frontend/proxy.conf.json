@@ -1,0 +1,25 @@
+{
+    "/v1/auth/**": {
+        "target": "http://127.0.0.1:8081"
+    },
+    "/v1/rooms": {
+        "target": "http://127.0.0.1:8082",
+        "ws": true
+    },
+    "/v1/rooms/**": {
+        "target": "http://127.0.0.1:8082",
+        "ws": true
+    },
+    "/v1/join": {
+        "target": "http://127.0.0.1:8082"
+    },
+    "/v1/catalog": {
+        "target": "http://127.0.0.1:8080"
+    },
+    "/v1/covers/**": {
+        "target": "http://127.0.0.1:8080"
+    },
+    "/v1/media/**": {
+        "target": "http://127.0.0.1:8080"
+    }
+}

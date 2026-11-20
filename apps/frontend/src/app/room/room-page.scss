@@ -1,0 +1,330 @@
+.room {
+    --room-surface: #191c23;
+    --room-stage: #0e1015;
+    --room-border: #373d48;
+    --room-muted: #c2c6d1;
+    --room-text: #f5f4ed;
+    --room-accent: #c7e479;
+    --room-accent-hover: #d7ef9d;
+    --room-accent-text: #202611;
+    --room-focus: #d3eb9b;
+    --room-motion: 150ms;
+    display: grid;
+    gap: clamp(15px, 1.8vw, 22px);
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    gap: 15px;
+}
+
+header > div,
+.viewer {
+    min-width: 0;
+}
+
+h1 {
+    margin: 7px 0 0;
+    font-size: clamp(1.65rem, 4.1vw, 3.15rem);
+    line-height: 1.09;
+    letter-spacing: -0.044em;
+    overflow-wrap: anywhere;
+    text-wrap: balance;
+}
+
+a {
+    width: fit-content;
+    color: var(--room-focus);
+    text-underline-offset: 4px;
+}
+
+.catalog-link {
+    color: var(--room-muted);
+    font-size: 0.875rem;
+
+    &:hover {
+        color: var(--room-text);
+    }
+}
+
+.role,
+.connection {
+    width: fit-content;
+    padding: 5px 10px;
+    border: 1px solid #404754;
+    border-radius: 999px;
+    background: #20252f;
+    color: var(--room-text);
+    font-size: 0.8125rem;
+}
+
+.role {
+    align-self: end;
+    white-space: nowrap;
+}
+
+p {
+    margin: 0;
+    line-height: 1.45;
+}
+
+.connection {
+    --indicator: #a9cb78;
+    display: flex;
+    max-width: 100%;
+    align-items: center;
+    gap: 8px;
+    color: #dce7d3;
+
+    &::before {
+        flex: none;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--indicator);
+        content: '';
+    }
+}
+
+.connection[data-state='waiting'],
+.connection[data-state='reconnecting'] {
+    --indicator: #ecc681;
+    border-color: #5a4d39;
+    background: #292419;
+    color: #f2debc;
+}
+
+.connection[data-state='opening'] {
+    --indicator: #8fc4e9;
+    color: #d5e9f8;
+}
+
+.content {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) clamp(242px, 25vw, 290px);
+    align-items: start;
+    gap: clamp(14px, 1.9vw, 24px);
+}
+
+.small,
+.participant-role,
+label {
+    color: var(--room-muted);
+    font-size: 0.825rem;
+}
+
+aside {
+    display: grid;
+    min-width: 0;
+    gap: 12px;
+    align-content: start;
+}
+
+aside > section {
+    display: grid;
+    min-width: 0;
+    gap: 10px;
+    padding: 15px;
+    border: 1px solid var(--room-border);
+    border-radius: 13px;
+    background: var(--room-surface);
+    overflow-wrap: anywhere;
+}
+
+h2 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 690;
+    letter-spacing: -0.02em;
+}
+
+h2 span {
+    padding: 3px 7px;
+    border-radius: 999px;
+    background: #252b36;
+    color: var(--room-muted);
+    font-size: 0.8125rem;
+    font-weight: 550;
+    font-variant-numeric: tabular-nums;
+}
+
+ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+li {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 2px 8px;
+    padding-block: 7px;
+    border-bottom: 1px solid #303641;
+}
+
+li:last-child {
+    padding-block-end: 0;
+    border-bottom: 0;
+}
+
+input {
+    width: 100%;
+    min-width: 0;
+    min-height: 37px;
+    padding: 8px 10px;
+    border: 1px solid #4a5362;
+    border-radius: 8px;
+    background: #13161d;
+    color: var(--room-text);
+    font: inherit;
+    font-size: 0.875rem;
+}
+
+button {
+    width: fit-content;
+    max-width: 100%;
+    min-height: 36px;
+    padding: 7px 11px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: var(--room-accent);
+    color: var(--room-accent-text);
+    font: inherit;
+    font-size: 0.875rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition:
+        background var(--room-motion),
+        border-color var(--room-motion);
+
+    &:hover:not(:disabled) {
+        background: var(--room-accent-hover);
+    }
+
+    &:disabled {
+        opacity: 0.65;
+        cursor: default;
+    }
+}
+
+.secondary {
+    border-color: #4a5362;
+    background: #222733;
+    color: var(--room-text);
+
+    &:hover:not(:disabled) {
+        border-color: #657185;
+        background: #303746;
+    }
+}
+
+.leave {
+    padding: 7px 11px;
+    border: 1px solid #4a5362;
+    border-radius: 8px;
+    color: var(--room-muted);
+    font-size: 0.875rem;
+    text-decoration: none;
+    transition:
+        background var(--room-motion),
+        border-color var(--room-motion);
+
+    &:hover {
+        border-color: #765956;
+        background: #302724;
+        color: #f7e0da;
+    }
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible {
+    outline: 2px solid var(--room-focus);
+    outline-offset: 3px;
+}
+
+.notice {
+    padding: 11px 14px;
+    border: 1px solid #775c4c;
+    border-radius: 9px;
+    background: #302620;
+    color: #f6e0cf;
+}
+
+.placeholder {
+    display: grid;
+    width: 100%;
+    min-height: 155px;
+    aspect-ratio: 16 / 9;
+    place-content: center;
+    justify-items: center;
+    gap: 12px;
+    padding: 22px;
+    border: 1px solid var(--room-border);
+    border-radius: 15px;
+    background: radial-gradient(ellipse at 65% 37%, #1d2431, var(--room-stage) 72%);
+    color: var(--room-muted);
+    text-align: center;
+}
+
+.close-confirm > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+@media (width < 810px) {
+    .content {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    aside {
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+    }
+
+    .leave {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (width < 470px) {
+    header {
+        gap: 8px;
+    }
+
+    .role {
+        padding-inline: 8px;
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .connection[data-state='opening']::before,
+    .connection[data-state='reconnecting']::before {
+        animation: waiting 1.25s ease-in-out infinite alternate;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .room {
+        --room-motion: 0ms;
+    }
+}
+
+@keyframes waiting {
+    from {
+        opacity: 0.55;
+    }
+
+    to {
+        opacity: 1;
+    }
+}

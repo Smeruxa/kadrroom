@@ -1,0 +1,19 @@
+<header class="topbar">
+    <div class="header-inner">
+        <a class="wordmark" routerLink="/"><span class="mark" aria-hidden="true"></span>KadrRoom</a>
+        @if (account(); as current) {
+        <div class="account">
+            <span>{{ current.displayName }}</span>
+            <button type="button" krButton="secondary" [disabled]="waiting()" (click)="logout()">
+                Выйти
+            </button>
+        </div>
+        }
+    </div>
+</header>
+<main class="layout">
+    @if (error(); as message) {
+    <p class="notice" krNotice="error">{{ message }}</p>
+    }
+    <router-outlet />
+</main>
