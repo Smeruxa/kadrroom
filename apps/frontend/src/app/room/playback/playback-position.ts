@@ -5,8 +5,19 @@ export function playbackClockMs(): number {
 }
 
 export function playbackPosition(state: PlaybackState, serverTimeMs: number): number {
+    return playbackPositionMs(state, serverTimeMs) / 1000
+}
+
+export function playbackHasJump(previous: PlaybackState, next: PlaybackState): boolean {
+    return (
+        next.revision > previous.revision &&
+        next.anchorPositionMs !== playbackPositionMs(previous, next.anchorServerTimeMs)
+    )
+}
+
+function playbackPositionMs(state: PlaybackState, serverTimeMs: number): number {
     const elapsed = state.playing ? Math.max(0, serverTimeMs - state.anchorServerTimeMs) : 0
-    return (state.anchorPositionMs + elapsed) / 1000
+    return state.anchorPositionMs + elapsed
 }
 
 export function formatTimecode(seconds: number): string {

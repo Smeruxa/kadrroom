@@ -57,67 +57,35 @@ p[role='status'] {
 }
 
 .controls {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 7px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
-button {
-    width: fit-content;
-    max-width: 100%;
-    min-height: 36px;
-    padding: 7px 10px;
-    border: 1px solid #4a5362;
-    border-radius: 8px;
-    background: #222733;
-    color: var(--room-text);
-    font: inherit;
-    font-size: 0.85rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition:
-        background var(--room-motion),
-        border-color var(--room-motion);
-
-    &:hover:not(:disabled) {
-        border-color: #657185;
-        background: #303746;
-    }
-
-    &:disabled {
-        opacity: 0.65;
-        cursor: default;
-    }
+.call[data-state='idle'] .call-action {
+    --kr-button-secondary-border: #668452;
+    --kr-button-secondary-hover-border: #8b9f67;
+    --kr-button-secondary-background: #2a3a23;
+    --kr-button-secondary-hover-background: #354a2a;
+    --kr-button-secondary-color: #d2eea2;
 }
 
-.controls button {
-    width: 100%;
-    min-width: 0;
-    overflow-wrap: anywhere;
-}
-
-button.primary {
-    border-color: #668452;
-    background: #2a3a23;
-    color: #d2eea2;
-
-    &:hover:not(:disabled) {
-        border-color: #8b9f67;
-        background: #354a2a;
-    }
+.call:is([data-state='connected'], [data-state='reconnecting']) .call-action {
+    --kr-button-secondary-border: #79514d;
+    --kr-button-secondary-hover-border: #aa736b;
+    --kr-button-secondary-background: #3e2828;
+    --kr-button-secondary-hover-background: #50312f;
+    --kr-button-secondary-color: #ffd7ce;
 }
 
 button[aria-pressed='true'] {
-    border-color: var(--room-accent);
-    background: var(--room-accent);
-    color: var(--room-accent-text);
-
-    &:hover:not(:disabled) {
-        background: var(--room-accent-hover);
-    }
+    --kr-button-secondary-border: var(--room-accent);
+    --kr-button-secondary-hover-border: var(--room-accent-hover);
+    --kr-button-secondary-background: var(--room-accent);
+    --kr-button-secondary-hover-background: var(--room-accent-hover);
+    --kr-button-secondary-color: var(--room-accent-text);
 }
 
-button:focus-visible,
 input:focus-visible {
     outline: 2px solid var(--room-focus);
     outline-offset: 3px;
@@ -164,6 +132,12 @@ figcaption {
     margin-block-start: 4px;
     color: var(--room-text);
     font-size: 0.8125rem;
+}
+
+@media (width < 470px) {
+    .cameras:has(> figure:only-child) {
+        grid-template-columns: minmax(0, 176px);
+    }
 }
 
 @media (prefers-reduced-motion: no-preference) {

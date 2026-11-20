@@ -1,3 +1,7 @@
+:host {
+    display: block;
+}
+
 .room {
     --room-surface: #191c23;
     --room-stage: #0e1015;
@@ -9,6 +13,20 @@
     --room-accent-text: #202611;
     --room-focus: #d3eb9b;
     --room-motion: 150ms;
+    --kr-icon-size: 1.25rem;
+    --kr-focus: var(--room-focus);
+    --kr-button-width: 44px;
+    --kr-button-min-height: 44px;
+    --kr-button-padding: 0;
+    --kr-button-radius: 9px;
+    --kr-button-primary-background: var(--room-accent);
+    --kr-button-primary-hover-background: var(--room-accent-hover);
+    --kr-button-primary-color: var(--room-accent-text);
+    --kr-button-secondary-border: #4a5362;
+    --kr-button-secondary-hover-border: #657185;
+    --kr-button-secondary-background: #222733;
+    --kr-button-secondary-hover-background: #303746;
+    --kr-button-secondary-color: var(--room-text);
     display: grid;
     gap: clamp(15px, 1.8vw, 22px);
 }
@@ -189,64 +207,48 @@ input {
     font-size: 0.875rem;
 }
 
-button {
-    width: fit-content;
-    max-width: 100%;
-    min-height: 36px;
-    padding: 7px 11px;
-    border: 1px solid transparent;
-    border-radius: 8px;
-    background: var(--room-accent);
-    color: var(--room-accent-text);
-    font: inherit;
-    font-size: 0.875rem;
-    font-weight: 700;
-    cursor: pointer;
-    transition:
-        background var(--room-motion),
-        border-color var(--room-motion);
-
-    &:hover:not(:disabled) {
-        background: var(--room-accent-hover);
-    }
-
-    &:disabled {
-        opacity: 0.65;
-        cursor: default;
-    }
+.invite-field {
+    display: flex;
+    gap: 8px;
 }
 
-.secondary {
-    border-color: #4a5362;
-    background: #222733;
-    color: var(--room-text);
+.invite-field input {
+    flex: 1 1 0;
+}
 
-    &:hover:not(:disabled) {
-        border-color: #657185;
-        background: #303746;
-    }
+.invite-field button {
+    flex: none;
+}
+
+.danger {
+    --kr-button-secondary-border: #89605a;
+    --kr-button-secondary-hover-border: #a7776e;
+    --kr-button-secondary-background: #472c2b;
+    --kr-button-secondary-hover-background: #533330;
+    --kr-button-secondary-color: #ffd8cd;
 }
 
 .leave {
-    padding: 7px 11px;
-    border: 1px solid #4a5362;
-    border-radius: 8px;
-    color: var(--room-muted);
-    font-size: 0.875rem;
+    display: inline-grid;
+    width: 44px;
+    min-height: 44px;
+    place-items: center;
+    border: 1px solid var(--kr-button-secondary-border);
+    border-radius: var(--kr-button-radius);
+    background: var(--kr-button-secondary-background);
+    color: var(--kr-button-secondary-color);
     text-decoration: none;
     transition:
         background var(--room-motion),
         border-color var(--room-motion);
 
     &:hover {
-        border-color: #765956;
-        background: #302724;
-        color: #f7e0da;
+        border-color: var(--kr-button-secondary-hover-border);
+        background: var(--kr-button-secondary-hover-background);
     }
 }
 
 a:focus-visible,
-button:focus-visible,
 input:focus-visible {
     outline: 2px solid var(--room-focus);
     outline-offset: 3px;
@@ -282,6 +284,21 @@ input:focus-visible {
     gap: 8px;
 }
 
+.close-confirm p {
+    color: var(--room-muted);
+    font-size: 0.875rem;
+}
+
+@media (width >= 1100px) {
+    :host {
+        margin-block-start: -16px;
+    }
+
+    .room {
+        gap: 18px;
+    }
+}
+
 @media (width < 810px) {
     .content {
         grid-template-columns: minmax(0, 1fr);
@@ -291,7 +308,8 @@ input:focus-visible {
         grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
     }
 
-    .leave {
+    .room-exit,
+    .close-confirm {
         grid-column: 1 / -1;
     }
 }

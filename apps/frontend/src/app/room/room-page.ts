@@ -1,5 +1,15 @@
 import { HttpClient, HttpErrorResponse } from '@angular/common/http'
-import { Component, DestroyRef, computed, inject, signal } from '@angular/core'
+import {
+    afterNextRender,
+    Component,
+    DestroyRef,
+    ElementRef,
+    Injector,
+    computed,
+    inject,
+    signal,
+    viewChild,
+} from '@angular/core'
 import { ActivatedRoute, Router, RouterLink } from '@angular/router'
 import type {
     ClientRoomMessage,
@@ -9,6 +19,7 @@ import type {
     RoomSession,
     ServerRoomMessage,
 } from '@kadrroom/contracts'
+import { KrButton, KrIcon } from '@kadrroom/ui'
 import { firstValueFrom } from 'rxjs'
 import { catalogSchema } from '../catalog/catalog.schema'
 import { apiErrorCode } from '../shared/http/api-error'
@@ -27,7 +38,7 @@ function accessEnded(error: unknown): boolean {
 
 @Component({
     selector: 'kadrroom-room-page',
-    imports: [RoomCall, RoomPlayback, RouterLink],
+    imports: [KrButton, KrIcon, RoomCall, RoomPlayback, RouterLink],
     templateUrl: './room-page.html',
     styleUrl: './room-page.scss',
 })
@@ -37,6 +48,17 @@ export class RoomPage {
     private readonly destroyRef = inject(DestroyRef)
     private readonly api = inject(RoomApi)
     private readonly http = inject(HttpClient)
+    private readonly injector = inject(Injector)
+    private readonly closeTrigger = viewChild<unknown, ElementRef<HTMLButtonElement>>(
+        'closeTrigger',
+        { read: ElementRef },
+    )
+    private readonly closeCancel = viewChild<unknown, ElementRef<HTMLButtonElement>>(
+        'closeCancel',
+        {
+            read: ElementRef,
+        },
+    )
     private readonly id = this.route.snapshot.paramMap.get('id') ?? ''
 
     protected readonly room = signal<RoomSession | null>(null)
@@ -93,6 +115,15 @@ export class RoomPage {
         void this.loadRoom()
     }
 
+    protected setCloseConfirmation(visible: boolean): void {
+        this.confirmClose.set(visible)
+        const target = visible ? this.closeCancel : this.closeTrigger
+        afterNextRender(
+            { write: () => target()?.nativeElement.focus() },
+            { injector: this.injector },
+        )
+    }
+
     protected async loadRoom(): Promise<void> {
         this.loading.set(true)
         this.error.set(null)
@@ -127,14 +158,16 @@ export class RoomPage {
 
         this.sourcePending = true
         this.sourceError.set(null)
-        this.source.set(null)
         try {
             const source = await this.api.playbackSource(this.id)
             if (!this.unavailable()) this.source.set(source)
         } catch (error) {
+            if (this.unavailable()) return
+
             if (accessEnded(error) && apiErrorCode(error) !== 'media_unavailable') {
                 this.endRoom('Комната закрыта или сеанс истёк.')
             } else {
+                this.source.set(null)
                 this.sourceError.set('Не удалось загрузить медиа.')
             }
         } finally {
@@ -142,7 +175,9 @@ export class RoomPage {
         }
     }
 
-    protected onMediaError(): void {
+    protected onMediaError(failedSource: PlaybackSource): void {
+        if (this.sourcePending || this.unavailable() || this.source() !== failedSource) return
+
         if (!this.refreshedAfterError) {
             this.refreshedAfterError = true
             void this.loadSource()
@@ -375,6 +410,7 @@ export class RoomPage {
     private endRoom(note: string): void {
         this.connection.set('ended')
         this.stopConnection()
+        this.source.set(null)
         this.invite.set(null)
         this.error.set(note)
     }

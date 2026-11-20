@@ -1,5 +1,21 @@
-<div class="player">
-    <div class="stage" #stage>
+<div
+    class="player"
+    #frame
+    role="group"
+    aria-label="Плеер комнаты"
+    tabindex="0"
+    kadrroomFullscreen
+    #presentation="kadrroomFullscreen"
+    [class.controls-hidden]="controlsHidden()"
+    (pointerenter)="pointerEntered($event)"
+    (pointermove)="revealControls()"
+    (pointerdown)="pointerActivated($event)"
+    (pointerleave)="pointerLeft($event)"
+    (focusin)="revealControls()"
+    (focusout)="focusLeft($event)"
+    (keydown)="handlePlayerKey($event)"
+>
+    <div class="stage">
         @if (source().mediaType === 'audio') {
             <div class="audio-art" aria-hidden="true"><span></span></div>
             <audio
@@ -10,8 +26,10 @@
                 (loadedmetadata)="mediaReady()"
                 (timeupdate)="updatePosition()"
                 (durationchange)="updatePosition()"
-                (waiting)="buffering.set(true)"
-                (playing)="buffering.set(false)"
+                (waiting)="mediaStopped(true)"
+                (playing)="mediaStarted()"
+                (pause)="mediaStopped()"
+                (emptied)="mediaStopped()"
                 (ended)="ended()"
                 (error)="sourceFailed.emit()"
             ></audio>
@@ -25,15 +43,23 @@
                 (loadedmetadata)="mediaReady()"
                 (timeupdate)="updatePosition()"
                 (durationchange)="updatePosition()"
-                (waiting)="buffering.set(true)"
-                (playing)="buffering.set(false)"
+                (waiting)="mediaStopped(true)"
+                (playing)="mediaStarted()"
+                (pause)="mediaStopped()"
+                (emptied)="mediaStopped()"
                 (ended)="ended()"
                 (error)="sourceFailed.emit()"
             ></video>
         }
         @if (autoplayBlocked()) {
-            <button class="activate" type="button" (click)="enablePlayback()">
-                Включить воспроизведение
+            <button
+                class="activate"
+                type="button"
+                aria-label="Включить воспроизведение"
+                title="Включить воспроизведение"
+                (click)="enablePlayback()"
+            >
+                <kr-icon name="play" />
             </button>
         } @else if (buffering()) {
             <p class="media-status" role="status">Загружаем медиа…</p>
@@ -43,14 +69,18 @@
         <div class="timeline">
             @if (host()) {
                 <input
+                    #timeline
                     type="range"
                     min="0"
-                    [max]="duration() || 0"
+                    [max]="duration()"
                     step="0.1"
                     [value]="preview() ?? position()"
                     [attr.aria-valuetext]="formatTimecode(preview() ?? position())"
-                    [disabled]="!duration() || !canControl()"
+                    [attr.aria-disabled]="!canControl()"
+                    [disabled]="!duration()"
+                    [style.--played]="playedPercent() + '%'"
                     aria-label="Позиция воспроизведения"
+                    (pointerdown)="beginScrub($event)"
                     (input)="previewSeek($event)"
                     (change)="seek($event)"
                 />
@@ -61,41 +91,102 @@
                     aria-label="Позиция воспроизведения"
                 ></progress>
             }
-            <span
-                >{{ formatTimecode(preview() ?? position()) }} /
-                {{ formatTimecode(duration()) }}</span
-            >
         </div>
         <div class="control-actions">
-            @if (host()) {
-                <button
-                    class="play-button"
-                    type="button"
-                    [disabled]="!state() || !canControl()"
-                    (click)="toggle()"
+            <div class="transport">
+                @if (host()) {
+                    <button
+                        class="control-button"
+                        type="button"
+                        aria-label="Назад на 5 секунд"
+                        title="Назад на 5 секунд"
+                        [attr.aria-disabled]="!canSkip()"
+                        (click)="seekBy(-5)"
+                    >
+                        <kr-icon name="back-five" />
+                    </button>
+                    @let playing = state()?.playing;
+                    @let playLabel = playing ? 'Пауза' : 'Воспроизвести';
+                    <button
+                        class="control-button play-button"
+                        type="button"
+                        [attr.aria-label]="playLabel"
+                        [title]="playLabel"
+                        [attr.aria-disabled]="!state() || !canControl()"
+                        (click)="toggle()"
+                    >
+                        <kr-icon [name]="playing ? 'pause' : 'play'" />
+                    </button>
+                    <button
+                        class="control-button"
+                        type="button"
+                        aria-label="Вперёд на 5 секунд"
+                        title="Вперёд на 5 секунд"
+                        [attr.aria-disabled]="!canSkip()"
+                        (click)="seekBy(5)"
+                    >
+                        <kr-icon name="forward-five" />
+                    </button>
+                }
+                <span class="timecode">
+                    <span>{{ formatTimecode(preview() ?? position()) }}</span>
+                    <span class="timecode-separator">/</span>
+                    <span>{{ formatTimecode(duration()) }}</span>
+                </span>
+            </div>
+            <div class="utilities">
+                <div
+                    class="volume"
+                    [class.volume-expanded]="volumeExpanded()"
+                    [class.volume-touch]="touchControls()"
+                    (focusin)="revealVolume($event)"
+                    (focusout)="leaveVolume($event)"
                 >
-                    {{ state()?.playing ? 'Пауза' : 'Воспроизвести' }}
+                    @let silent = muted() || volume() === 0;
+                    @let volumeLabel =
+                        touchControls()
+                            ? volumeExpanded()
+                                ? 'Скрыть громкость'
+                                : 'Показать громкость'
+                            : silent
+                              ? 'Включить звук'
+                              : 'Выключить звук';
+                    <button
+                        class="control-button"
+                        type="button"
+                        [attr.aria-label]="volumeLabel"
+                        [attr.aria-expanded]="touchControls() ? volumeExpanded() : null"
+                        [title]="volumeLabel"
+                        (click)="toggleVolume()"
+                    >
+                        <kr-icon [name]="silent ? 'muted' : 'volume'" />
+                    </button>
+                    <div class="volume-track">
+                        <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.05"
+                            [value]="volume()"
+                            aria-label="Громкость"
+                            (pointerdown)="beginScrub($event)"
+                            (input)="changeVolume($event)"
+                        />
+                    </div>
+                </div>
+                @let fullscreenLabel =
+                    presentation.mode() ? 'Выйти из полноэкранного режима' : 'Полный экран';
+                <button
+                    #fullscreenButton
+                    class="control-button fullscreen"
+                    type="button"
+                    [attr.aria-label]="fullscreenLabel"
+                    [title]="fullscreenLabel"
+                    (click)="presentation.toggle(fullscreenButton)"
+                >
+                    <kr-icon [name]="presentation.mode() ? 'exit-fullscreen' : 'fullscreen'" />
                 </button>
-            }
-            <label class="volume">
-                Громкость
-                <input
-                    type="range"
-                    min="0"
-                    max="1"
-                    step="0.05"
-                    [value]="volume()"
-                    (input)="changeVolume($event)"
-                />
-            </label>
-            @if (source().mediaType === 'video' && supportsFullscreen) {
-                <button class="secondary fullscreen" type="button" (click)="fullscreen()">
-                    На весь экран
-                </button>
-            }
+            </div>
         </div>
     </div>
-    @if (playbackError(); as message) {
-        <p class="player-error" role="alert">{{ message }}</p>
-    }
 </div>

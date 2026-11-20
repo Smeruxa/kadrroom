@@ -1,42 +1,68 @@
 <section class="call" aria-labelledby="call-title" [attr.data-state]="status()">
     <h2 id="call-title">Звонок</h2>
+    @let active = status() === 'connected' || status() === 'reconnecting';
 
     @if (status() === 'idle') {
         <p>При входе микрофон и камера выключены.</p>
-        <button class="primary" type="button" (click)="join()">Войти в звонок</button>
     } @else if (status() === 'unavailable') {
         <p role="status">Звонок пока недоступен.</p>
-        <button type="button" (click)="join()">Проверить снова</button>
     } @else if (status() === 'connecting') {
         <p role="status">Подключаем к звонку…</p>
-        <button type="button" (click)="leave()">Отменить</button>
     } @else {
         <p role="status">
             {{ status() === 'reconnecting' ? 'Восстанавливаем звонок…' : 'Вы в звонке.' }}
         </p>
-        <div class="controls">
+    }
+
+    <div class="controls">
+        @if (active) {
             <button
+                krButton="secondary"
                 type="button"
                 aria-label="Микрофон"
                 [attr.aria-pressed]="microphone()"
+                [title]="microphone() ? 'Выключить микрофон' : 'Включить микрофон'"
                 [disabled]="status() !== 'connected' || devicePending()"
                 (click)="toggleDevice('microphone')"
             >
-                {{ microphone() ? 'Микрофон вкл.' : 'Микрофон выкл.' }}
+                <kr-icon [name]="microphone() ? 'microphone' : 'microphone-off'" />
             </button>
             <button
+                krButton="secondary"
                 type="button"
                 aria-label="Камера"
                 [attr.aria-pressed]="camera()"
+                [title]="camera() ? 'Выключить камеру' : 'Включить камеру'"
                 [disabled]="status() !== 'connected' || devicePending()"
                 (click)="toggleDevice('camera')"
             >
-                {{ camera() ? 'Камера вкл.' : 'Камера выкл.' }}
+                <kr-icon [name]="camera() ? 'camera' : 'camera-off'" />
             </button>
-        </div>
-        @if (audioBlocked()) {
-            <button type="button" (click)="enableAudio()">Включить звук звонка</button>
+            @if (audioBlocked()) {
+                <button
+                    krButton="secondary"
+                    type="button"
+                    aria-label="Включить звук звонка"
+                    title="Включить звук звонка"
+                    (click)="enableAudio()"
+                >
+                    <kr-icon name="volume" />
+                </button>
+            }
         }
+        <button
+            class="call-action"
+            krButton="secondary"
+            type="button"
+            [attr.aria-label]="callAction().label"
+            [title]="callAction().label"
+            (click)="handleCallAction()"
+        >
+            <kr-icon [name]="callAction().icon" />
+        </button>
+    </div>
+
+    @if (active) {
         <label>
             Громкость звонка
             <input
@@ -64,7 +90,6 @@
                 }
             </div>
         }
-        <button type="button" (click)="leave()">Выйти из звонка</button>
     }
 
     @if (error(); as message) {

@@ -52,14 +52,20 @@
                         [host]="active.role === 'host'"
                         [canControl]="canControl()"
                         (playbackCommand)="sendCommand($event)"
-                        (sourceFailed)="onMediaError()"
+                        (sourceFailed)="onMediaError(media)"
                     />
                 } @else {
                     <div class="placeholder">
                         @if (sourceError(); as message) {
                             <p role="alert">{{ message }}</p>
-                            <button type="button" (click)="retrySource()">
-                                Загрузить медиа заново
+                            <button
+                                krButton="secondary"
+                                type="button"
+                                aria-label="Загрузить медиа заново"
+                                title="Загрузить медиа заново"
+                                (click)="retrySource()"
+                            >
+                                <kr-icon name="refresh" />
                             </button>
                         } @else {
                             <p role="status">Загружаем медиа…</p>
@@ -92,61 +98,111 @@
                 @if (active.role === 'host') {
                     <section class="invite">
                         <h2>Приглашение</h2>
-                        @if (inviteURL(); as link) {
+                        @let link = inviteURL();
+                        @let linkAction = link ? 'Обновить ссылку' : 'Создать ссылку';
+                        @if (link) {
                             <label for="invitation">Ссылка для гостя</label>
-                            <input #invitation id="invitation" type="url" [value]="link" readonly />
-                            <button type="button" (click)="copyInvite(invitation)">
-                                Копировать ссылку
-                            </button>
                         }
-                        <button
-                            class="secondary"
-                            type="button"
-                            [disabled]="invitePending()"
-                            (click)="rotateInvite()"
-                        >
-                            {{ inviteURL() ? 'Обновить ссылку' : 'Создать ссылку' }}
-                        </button>
+                        <div class="invite-field">
+                            @if (link) {
+                                <input
+                                    #invitation
+                                    id="invitation"
+                                    type="url"
+                                    [value]="link"
+                                    readonly
+                                />
+                                <button
+                                    krButton="primary"
+                                    type="button"
+                                    aria-label="Копировать ссылку"
+                                    title="Копировать ссылку"
+                                    (click)="copyInvite(invitation)"
+                                >
+                                    <kr-icon name="copy" />
+                                </button>
+                            }
+                            <button
+                                krButton="secondary"
+                                type="button"
+                                [attr.aria-label]="linkAction"
+                                [title]="linkAction"
+                                [disabled]="invitePending()"
+                                (click)="rotateInvite()"
+                            >
+                                <kr-icon [name]="link ? 'refresh' : 'link'" />
+                            </button>
+                        </div>
                         @if (inviteNotice(); as message) {
                             <p class="small" role="status">{{ message }}</p>
                         }
                     </section>
                     @if (confirmClose()) {
-                        <section class="close-confirm">
-                            <p>Просмотр завершится для всех участников.</p>
+                        <section class="close-confirm" aria-labelledby="close-room-title">
+                            <h2 id="close-room-title">Закрыть комнату?</h2>
+                            <p id="close-room-explanation">
+                                Просмотр завершится для всех участников.
+                            </p>
                             <div>
                                 <button
+                                    krButton="secondary"
+                                    class="danger"
                                     type="button"
+                                    aria-label="Завершить просмотр"
+                                    aria-describedby="close-room-explanation"
+                                    title="Завершить просмотр"
                                     [disabled]="closePending()"
                                     (click)="closeRoom()"
                                 >
-                                    Завершить просмотр
+                                    <kr-icon name="check" />
                                 </button>
                                 <button
-                                    class="secondary"
+                                    #closeCancel
+                                    krButton="secondary"
                                     type="button"
+                                    aria-label="Отмена"
+                                    aria-describedby="close-room-explanation"
+                                    title="Отмена"
                                     [disabled]="closePending()"
-                                    (click)="confirmClose.set(false)"
+                                    (click)="setCloseConfirmation(false)"
                                 >
-                                    Отмена
+                                    <kr-icon name="cancel" />
                                 </button>
                             </div>
                         </section>
                     } @else {
                         <button
-                            class="secondary leave"
+                            #closeTrigger
+                            krButton="secondary"
+                            class="room-exit"
                             type="button"
-                            (click)="confirmClose.set(true)"
+                            aria-label="Закрыть комнату"
+                            title="Закрыть комнату"
+                            (click)="setCloseConfirmation(true)"
                         >
-                            Закрыть комнату
+                            <kr-icon name="room-close" />
                         </button>
                     }
                 } @else {
-                    <a class="leave" routerLink="/">Покинуть комнату</a>
+                    <a
+                        class="room-exit leave"
+                        routerLink="/"
+                        aria-label="Покинуть комнату"
+                        title="Покинуть комнату"
+                        ><kr-icon name="exit" />
+                    </a>
                 }
             </aside>
         </div>
     } @else {
-        <button type="button" (click)="loadRoom()">Повторить</button>
+        <button
+            krButton="secondary"
+            type="button"
+            aria-label="Повторить"
+            title="Повторить"
+            (click)="loadRoom()"
+        >
+            <kr-icon name="refresh" />
+        </button>
     }
 </section>

@@ -105,6 +105,8 @@ test('verified host and browser guest share a real room timeline', async ({
             await expect(guestMain.getByText(hostName, { exact: true })).toBeVisible()
             await expect(hostMain.getByText(guestName, { exact: true })).toBeVisible()
             await expect(guestMain.getByRole('progressbar', { name: timeline })).toBeVisible()
+            await roomVideo(guest).hover()
+            await guestMain.getByRole('button', { name: 'Выключить звук', exact: true }).hover()
             await expect(guestMain.getByRole('slider', { name: 'Громкость' })).toBeEnabled()
             await expect(guestMain.getByRole('slider', { name: timeline })).toHaveCount(0)
             await expect(
@@ -143,11 +145,13 @@ test('verified host and browser guest share a real room timeline', async ({
         const firstTarget =
             await test.step('Play, pause and seek on both real media elements', async () => {
                 await expect(guestVideo).toHaveJSProperty('paused', true)
+                await hostVideo.hover()
                 await play.click()
                 await Promise.all([
                     expectPlayback(host, hostVideo, 'Host'),
                     expectPlayback(guest, guestVideo, 'Guest'),
                 ])
+                await hostVideo.hover()
                 await pause.click()
                 await expect(hostVideo).toHaveJSProperty('paused', true)
                 await expect(guestVideo).toHaveJSProperty('paused', true)

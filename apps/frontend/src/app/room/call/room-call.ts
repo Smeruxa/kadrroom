@@ -2,10 +2,13 @@ import {
     ChangeDetectionStrategy,
     Component,
     DestroyRef,
+    computed,
     inject,
     input,
     signal,
 } from '@angular/core'
+import { KrButton, KrIcon } from '@kadrroom/ui'
+import type { KrIconName } from '@kadrroom/ui'
 import { RemoteAudioTrack, Room, RoomEvent, Track } from 'livekit-client'
 import { apiErrorCode } from '../../shared/http/api-error'
 import { RoomApi } from '../room-api'
@@ -13,6 +16,19 @@ import { CallTrack } from './call-track'
 
 type CallStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'unavailable'
 type CallDevice = 'microphone' | 'camera'
+
+interface CallAction {
+    icon: KrIconName
+    label: string
+}
+
+const callActions: Record<CallStatus, CallAction> = {
+    idle: { icon: 'phone', label: 'Войти в звонок' },
+    connecting: { icon: 'cancel', label: 'Отменить' },
+    connected: { icon: 'phone-off', label: 'Выйти из звонка' },
+    reconnecting: { icon: 'phone-off', label: 'Выйти из звонка' },
+    unavailable: { icon: 'refresh', label: 'Проверить снова' },
+}
 
 interface CameraFeed {
     id: string
@@ -27,7 +43,7 @@ interface AudioFeed {
 
 @Component({
     selector: 'kadrroom-room-call',
-    imports: [CallTrack],
+    imports: [CallTrack, KrButton, KrIcon],
     templateUrl: './room-call.html',
     styleUrl: './room-call.scss',
     changeDetection: ChangeDetectionStrategy.OnPush,
@@ -40,6 +56,7 @@ export class RoomCall {
     private room: Room | null = null
 
     protected readonly status = signal<CallStatus>('idle')
+    protected readonly callAction = computed(() => callActions[this.status()])
     protected readonly error = signal<string | null>(null)
     protected readonly microphone = signal(false)
     protected readonly camera = signal(false)
@@ -55,7 +72,16 @@ export class RoomCall {
         })
     }
 
-    protected async join(): Promise<void> {
+    protected handleCallAction(): void {
+        const status = this.status()
+        if (status === 'idle' || status === 'unavailable') {
+            void this.join()
+        } else {
+            this.leave()
+        }
+    }
+
+    private async join(): Promise<void> {
         if (this.room) return
 
         this.status.set('connecting')
@@ -91,7 +117,7 @@ export class RoomCall {
         }
     }
 
-    protected leave(): void {
+    private leave(): void {
         this.disconnect()
         this.error.set(null)
         this.status.set('idle')

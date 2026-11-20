@@ -1,4 +1,6 @@
 export { KrButton } from './button'
 export type { ButtonVariant } from './button'
+export { KrIcon } from './icon'
+export type { KrIconName } from './icon'
 export { KrNotice } from './notice'
 export type { NoticeTone } from './notice'
