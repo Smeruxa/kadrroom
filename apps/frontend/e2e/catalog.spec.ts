@@ -20,6 +20,14 @@ test('loads the real Go catalog through the frontend proxy', async ({ page }) =>
             )
             .toBeGreaterThan(0)
     }
+
+    const icon = page.locator('link[rel="icon"][type="image/svg+xml"]')
+    await expect(icon).toHaveAttribute('href', /\S/)
+    const iconURL = await icon.evaluate((link: HTMLLinkElement) => link.href)
+    expect(new URL(iconURL).origin).toBe(new URL(page.url()).origin)
+    const response = await page.request.get(iconURL)
+    expect(response.status()).toBe(200)
+    expect(response.headers()['content-type']).toMatch(/^image\/svg\+xml(?:\s*;|$)/i)
 })
 
 test('keeps catalog items visible when a poster is unavailable', async ({ page, apiMock }) => {
